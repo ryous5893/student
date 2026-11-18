@@ -324,6 +324,7 @@
       update("注文 " + order.id + " の納期を変更しました。");
       return;
     }
+    let savedMessage = "保存しました。";
     if (type === "order") {
       const fields = {
         customer: data.get("customer").trim(), product: data.get("product"), quantity: Number(data.get("quantity")),
@@ -340,11 +341,17 @@
         notice.textContent = "カードの注文は50部以上で入力してください。";
         return;
       }
-      if (order?.status === "received") Object.assign(order, fields);
-      else state.orders.push({
-        ...fields, id: state.nextId++, status: "received", proofFile: "", revision: 0, proofUpdatedAt: null,
-        reviewMemo: "", returnReasons: [], workOwner: "", quoteSnapshot: null
-      });
+      if (order?.status === "received") {
+        Object.assign(order, fields);
+        savedMessage = `注文番号 ${order.id} の注文を保存しました。`;
+      } else {
+        const id = state.nextId++;
+        state.orders.push({
+          ...fields, id, status: "received", proofFile: "", revision: 0, proofUpdatedAt: null,
+          reviewMemo: "", returnReasons: [], workOwner: "", quoteSnapshot: null
+        });
+        savedMessage = `注文番号 ${id} で注文を登録しました。`;
+      }
     }
     if (type === "proof" && order) {
       const file = data.get("file").trim();
@@ -380,7 +387,7 @@
       Object.assign(state.rates, nextRates);
     }
     selection = null;
-    update("保存しました。");
+    update(savedMessage);
   });
 
   view.addEventListener("click", event => {
