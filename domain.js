@@ -28,6 +28,14 @@
     return orders.filter(order => ["returned", "ready", "printing", "finishing", "inspected"].includes(order.status));
   }
 
+  function revertInspection(order, at = new Date().toISOString()) {
+    if (order.status !== "inspected") return false;
+    const history = Array.isArray(order.inspectionHistory) ? order.inspectionHistory : [];
+    order.inspectionHistory = [...history, { at, from: "inspected", to: "finishing" }];
+    order.status = "finishing";
+    return true;
+  }
+
   function canChangeProductionDue(order) {
     return ["printing", "finishing", "inspected"].includes(order.status);
   }
@@ -63,7 +71,7 @@
     return { orders, rates, nextId: 107 };
   }
 
-  const api = { status, products, paper, finish, delivery, quote, manufacturingOrders, canChangeProductionDue, changeProductionDue, seed };
+  const api = { status, products, paper, finish, delivery, quote, manufacturingOrders, revertInspection, canChangeProductionDue, changeProductionDue, seed };
   globalThis.PrintShop = api;
   if (typeof module !== "undefined") module.exports = api;
 })();

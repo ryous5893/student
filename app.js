@@ -131,6 +131,16 @@
     ]));
   }
 
+  function renderInspectionHistory(order) {
+    const history = Array.isArray(order.inspectionHistory) ? order.inspectionHistory : [];
+    if (!history.length) return "—";
+    return `<details><summary>${history.length}件</summary><ul>${history.map(entry => {
+      const date = new Date(entry.at);
+      const time = Number.isNaN(date.getTime()) ? "日時不明" : date.toLocaleString("ja-JP");
+      return `<li>${esc(time)}：${esc(shop.status[entry.from] ?? entry.from)} → ${esc(shop.status[entry.to] ?? entry.to)}</li>`;
+    }).join("")}</ul></details>`;
+  }
+
   function renderProductionDue(order) {
     const history = Array.isArray(order.productionDueHistory) ? order.productionDueHistory : [];
     if (!history.length) return esc(order.due);
@@ -154,20 +164,22 @@
       : order ? `<form class="panel" data-form="owner"><h2>注文 ${order.id} の製造担当</h2><div class="grid">
       ${field("担当者", "owner", order.workOwner, "text", "required maxlength=50")}</div>
       <div class="actions"><button>担当を保存</button></div></form>` : "";
-    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "担当", "操作"], candidates.map(item => [
-      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", button("担当を設定", "choose", item.id) +
+    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "担当", "検品取り消し履歴", "操作"], candidates.map(item => [
+      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
       (shop.canChangeProductionDue(item) ? button("納期を変更", "editProductionDue", item.id) : "") +
-      (nextLabel[item.status] ? button(nextLabel[item.status], "advance", item.id) : "")
+      (nextLabel[item.status] ? button(nextLabel[item.status], "advance", item.id) : "") +
+      (item.status === "inspected" ? button("加工中に戻す", "revertInspection", item.id) : "")
     ]));
   }
 
   function renderDelivery() {
     const candidates = state.orders.filter(order => ["inspected", "delivered"].includes(order.status));
-    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "取消履歴", "操作"], candidates.map(item => [
+    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
       ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address),
       (item.history ?? []).map(entry =>
         `${esc(formatDateTime(entry.at))} ${esc(entry.operator)}：${esc(entry.reason)}`).join("<br>"),
-      item.status === "inspected" ? button("納品完了", "deliver", item.id)
+      renderInspectionHistory(item),
+      item.status === "inspected" ? button("納品完了", "deliver", item.id) + button("加工中に戻す", "revertInspection", item.id)
         : item.status === "delivered" ? button("納品取消（管理者）", "undoDeliver", item.id) : ""
     ]));
   }
@@ -296,6 +308,11 @@
       }
       case "advance":
         order.status = { ready: "printing", printing: "finishing", finishing: "inspected" }[order.status];
+        break;
+      case "revertInspection":
+        if (order.status !== "inspected") return;
+        if (!window.confirm(`注文 ${order.id}（${order.customer}）の検品完了を取り消し、加工中に戻しますか？`)) return;
+        if (!shop.revertInspection(order)) return;
         break;
       case "deliver":
         if (order.status !== "inspected") return;

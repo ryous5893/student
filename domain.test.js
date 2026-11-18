@@ -1,7 +1,7 @@
 // 実行: node --test domain.test.js
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { quote, seed, canChangeProductionDue, changeProductionDue } = require("./domain.js");
+const { quote, seed, revertInspection, canChangeProductionDue, changeProductionDue } = require("./domain.js");
 
 const rates = { flyer: 10, poster: 120, card: 16 };
 const flyer = (overrides) => ({
@@ -98,4 +98,37 @@ test("納期変更: 複数回の変更履歴を保持する", () => {
   assert.deepEqual(order.productionDueHistory.map(entry => [entry.from, entry.to]), [
     ["2026-12-04", "2026-12-05"], ["2026-12-05", "2026-12-03"]
   ]);
+});
+
+test("検品取り消し: 加工中に戻し、日時と状態変更を記録する", () => {
+  const order = seed().orders.find(item => item.id === 106);
+  const snapshot = structuredClone(order.quoteSnapshot);
+  const at = "2026-11-18T08:00:00.000Z";
+  assert.equal(revertInspection(order, at), true);
+  assert.equal(order.status, "finishing");
+  assert.deepEqual(order.inspectionHistory, [{ at, from: "inspected", to: "finishing" }]);
+  assert.deepEqual(order.quoteSnapshot, snapshot);
+  assert.equal(order.quantity, 12);
+});
+
+test("検品取り消し: 納品済みを含む検品済み以外の注文は変更しない", () => {
+  for (const status of ["received", "quoted", "proof", "returned", "ready", "printing", "finishing", "delivered"]) {
+    const order = { ...seed().orders[0], status };
+    const before = structuredClone(order);
+    assert.equal(revertInspection(order), false);
+    assert.deepEqual(order, before);
+  }
+});
+
+test("検品取り消し: 二重実行を防ぎ、再検品後も以前の履歴を保持する", () => {
+  const order = seed().orders.find(item => item.id === 106);
+  assert.equal(revertInspection(order, "2026-11-18T08:00:00.000Z"), true);
+  const firstEntry = structuredClone(order.inspectionHistory[0]);
+  assert.equal(revertInspection(order), false);
+  assert.equal(order.inspectionHistory.length, 1);
+  order.status = "inspected";
+  assert.equal(revertInspection(order, "2026-11-18T09:00:00.000Z"), true);
+  assert.equal(order.inspectionHistory.length, 2);
+  assert.deepEqual(order.inspectionHistory[0], firstEntry);
+  assert.equal(order.inspectionHistory[1].at, "2026-11-18T09:00:00.000Z");
 });
