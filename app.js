@@ -29,6 +29,7 @@
   let orderNumberFilter = "";
   let statusFilter = "all";
   let proofFilter = "all";
+  let workOwnerFilter = "all";
 
   function load() {
     try {
@@ -226,8 +227,13 @@
 
   function renderWork() {
     const candidates = shop.manufacturingOrders(state.orders);
+    const filtered = workOwnerFilter === "unassigned"
+      ? candidates.filter(item => !String(item.workOwner ?? "").trim()) : candidates;
     const nextLabel = { ready: "印刷を開始", printing: "加工へ進む", finishing: "検品完了" };
-    const order = candidates.find(item => item.id === selection);
+    const order = filtered.find(item => item.id === selection);
+    const filterForm = `<form class="panel" data-form="workOwnerFilter"><h2>表示条件</h2>
+      ${select("表示対象", "ownerScope", { all: "すべて", unassigned: "担当未割当のみ" }, workOwnerFilter)}
+      <div class="actions"><button>絞り込む</button></div></form>`;
     const form = order && workEditor === "interruption" ? `<form class="panel" data-form="workInterruption"><h2>注文 ${order.id} の作業中断メモ</h2><div class="grid">
       ${field("中断理由", "interruptionReason", order.workInterruption?.reason, "text", "required maxlength=300")}
       ${field("再開予定日（未定なら空欄）", "resumeDate", order.workInterruption?.resumeDate, "date")}
@@ -239,7 +245,8 @@
       : order ? `<form class="panel" data-form="owner"><h2>注文 ${order.id} の製造担当</h2><div class="grid">
       ${field("担当者", "owner", order.workOwner, "text", "required maxlength=50")}</div>
       <div class="actions"><button>担当を保存</button></div></form>` : "";
-    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "現在の担当", "工程ごとの担当履歴", "作業中断メモ", "検品取り消し履歴", "操作"], candidates.map(item => [
+    return filterForm + form + `<p role="status">表示件数：${filtered.length}件</p>`
+      + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "現在の担当", "工程ごとの担当履歴", "作業中断メモ", "検品取り消し履歴", "操作"], filtered.map(item => [
       ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkOwnerHistory(item), renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
       (canEditWorkInterruption(item) ? button("中断メモ", "editWorkInterruption", item.id) : "") +
       (shop.canChangeProductionDue(item) ? button("納期を変更", "editProductionDue", item.id) : "") +
@@ -309,6 +316,12 @@
     }
     if (type === "proofFilter") {
       proofFilter = data.get("proofScope") === "missing" ? "missing" : "all";
+      selection = null;
+      render();
+      return;
+    }
+    if (type === "workOwnerFilter") {
+      workOwnerFilter = data.get("ownerScope") === "unassigned" ? "unassigned" : "all";
       selection = null;
       render();
       return;
@@ -503,6 +516,7 @@
     orderNumberFilter = "";
     statusFilter = "all";
     proofFilter = "all";
+    workOwnerFilter = "all";
     selection = null;
     update("サンプルに戻しました。");
   });
