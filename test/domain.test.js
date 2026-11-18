@@ -16,7 +16,7 @@ test("all quote lines are floored to whole yen", () => {
   assert.equal(pricing.paperCost, Math.floor(4 * 1001));
   assert.equal(pricing.finishing, 500);
   assert.equal(pricing.rush, 1000);
-  assert.equal(pricing.discount, Math.floor(pricing.printing * 0.2));
+  assert.equal(pricing.discount, Math.floor(pricing.printing * 0.1));
 });
 
 test("quote total equals the signed sum of all detail lines", () => {
