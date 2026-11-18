@@ -19,7 +19,7 @@
     const finishing = finish[order.finish].fee;
     const rush = order.rush ? 1000 : 0;
     const paperCost = paper[order.paper].unit * order.quantity;
-    const discount = order.quantity >= 1000 ? Math.floor(printing * (order.double ? 0.2 : 0.1)) : 0;
+    const discount = order.quantity >= 1000 ? Math.floor(printing * 0.1) : 0;
     const subtotal = printing + paperCost + finishing + rush;
     return { printing, paperCost, finishing, rush, discount, total: subtotal - discount };
   }
