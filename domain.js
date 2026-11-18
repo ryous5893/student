@@ -79,6 +79,7 @@
     const next = { ready: "printing", printing: "finishing", finishing: "inspected" }[order.status];
     if (typeof next !== "string") return false;
     recordStageOwner(order, at);
+    if (next === "printing") order.printStartedAt = at;
     order.status = next;
     recordStageOwner(order, at);
     return true;

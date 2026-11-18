@@ -89,6 +89,15 @@
     }</tbody></table></div>`;
   }
 
+  // 希望納期を、今日・明日以降・過去のラベル付きで表示する（今日は端末の日付で判定）
+  function renderDue(due) {
+    if (!due) return esc(due);
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const [kind, label] = due === today ? ["today", "今日"] : due < today ? ["past", "過去"] : ["future", "明日以降"];
+    return `${esc(due)} <span class="due-tag due-${kind}">${label}</span>`;
+  }
+
   function orderCells(order) {
     return [order.id, esc(order.customer), esc(shop.products[order.product].name), order.quantity, shop.status[order.status]];
   }
@@ -131,7 +140,7 @@
         <div class="actions"><button>絞り込む</button><button class="secondary" name="filterAction" value="clear">絞り込みを解除</button></div>
         </form><p role="status">表示件数：${filteredOrders.length}件</p>`
       + table(["注文", "注文者", "商品", "部数", "状態", "納期", "備考", "受付経路", "操作"], filteredOrders.map(item => [
-        ...orderCells(item), esc(item.due), esc(item.remarks) || "—", esc(intakeChannels[item.intakeChannel] ?? "未設定"),
+        ...orderCells(item), renderDue(item.due), esc(item.remarks) || "—", esc(intakeChannels[item.intakeChannel] ?? "未設定"),
         (item.status === "received" ? button("編集", "edit", item.id) : "") +
         (item.delivery === "ship" ? button("配送先を編集", "address", item.id) : "") + button("見積へ", "quote", item.id)
       ])) + `<p class="summary" role="status">表示中の合計部数：${new Intl.NumberFormat("ja-JP").format(totalQuantity)}部</p>`;
@@ -270,8 +279,8 @@
       ${field("担当者", "owner", order.workOwner, "text", "required maxlength=50")}</div>
       <div class="actions"><button>担当を保存</button></div></form>` : "";
     return filterForm + form + `<p role="status">表示件数：${filtered.length}件</p>`
-      + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "現在の担当", "工程ごとの担当履歴", "承認内容", "作業中断メモ", "検品取り消し履歴", "操作"], filtered.map(item => [
-      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkOwnerHistory(item), renderApproval(item), renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
+      + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "印刷開始時刻", "現在の担当", "工程ごとの担当履歴", "承認内容", "作業中断メモ", "検品取り消し履歴", "操作"], filtered.map(item => [
+      ...orderCells(item), renderProductionDue(item), item.printStartedAt ? esc(formatDateTime(item.printStartedAt)) : "—", esc(item.workOwner) || "未割当", renderWorkOwnerHistory(item), renderApproval(item), renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
       (canEditWorkInterruption(item) ? button("中断メモ", "editWorkInterruption", item.id) : "") +
       (shop.canChangeProductionDue(item) ? button("納期を変更", "editProductionDue", item.id) : "") +
       (nextLabel[item.status] ? button(nextLabel[item.status], "advance", item.id) : "") +
@@ -281,13 +290,16 @@
 
   function renderDelivery() {
     const candidates = state.orders.filter(order => ["inspected", "delivered"].includes(order.status));
-    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "連絡先電話番号", "工程ごとの担当履歴", "承認内容", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
+    const order = candidates.find(item => item.id === selection && item.status === "delivered" && item.delivery === "ship");
+    const form = order ? `<form class="panel" data-form="returnReason"><h2>注文 ${order.id} の返送理由</h2>${select("返送理由", "reason", { "": "選択してください", absent: "不在", unknown: "住所不明", other: "その他" }, "")}<div class="actions"><button>返送理由を記録</button>${button("閉じる", "clear", order.id)}</div></form>` : "";
+    return form + table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "連絡先電話番号", "工程ごとの担当履歴", "承認内容", "取消履歴", "検品取り消し履歴", "返送理由", "操作"], candidates.map(item => [
       ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address) || (item.delivery === "pickup" ? "不要（店頭受取）" : "未登録"), esc(item.phone) || "未登録", renderWorkOwnerHistory(item), renderApproval(item),
       (item.history ?? []).map(entry =>
         `${esc(formatDateTime(entry.at))} ${esc(entry.operator)}：${esc(entry.reason)}`).join("<br>"),
       renderInspectionHistory(item),
+      (Array.isArray(item.returnHistory) ? item.returnHistory : []).map(entry => `${esc(formatDateTime(entry.at))}：${esc(entry.reason)}`).join("<br>") || "—",
       item.status === "inspected" ? button("納品完了", "deliver", item.id) + button("加工中に戻す", "revertInspection", item.id)
-        : item.status === "delivered" ? button("納品取消（管理者）", "undoDeliver", item.id) : ""
+        : item.status === "delivered" ? button("納品取消（管理者）", "undoDeliver", item.id) + (item.delivery === "ship" ? button("返送理由を記録", "chooseReturnReason", item.id) : "") : ""
     ]));
   }
 
@@ -409,6 +421,16 @@
       update("用紙の受付設定を保存しました。");
       return;
     }
+    if (type === "returnReason") {
+      const reasons = { absent: "不在", unknown: "住所不明", other: "その他" };
+      const key = data.get("reason");
+      if (!order || order.status !== "delivered" || order.delivery !== "ship" || !Object.hasOwn(reasons, key)) { notice.textContent = "配送済みの注文と返送理由を選択してください。"; return; }
+      const history = Array.isArray(order.returnHistory) ? order.returnHistory : [];
+      order.returnHistory = [...history, { reason: reasons[key], at: new Date().toISOString() }];
+      selection = null;
+      update("注文 " + order.id + " の返送理由を記録しました。");
+      return;
+    }
     if (type === "productionDue") {
       if (!order || !shop.canChangeProductionDue(order)) { notice.textContent = "印刷開始後・納品前の注文だけ納期を変更できます。"; return; }
       const due = data.get("due");
@@ -524,6 +546,9 @@
         if (!window.confirm(`注文 ${order.id} の作業中断メモを解除しますか？`)) return;
         delete order.workInterruption;
         break;
+      case "chooseReturnReason":
+        if (order.status !== "delivered" || order.delivery !== "ship") return;
+        selection = order.id; render(); view.querySelector("form select")?.focus(); return;
       case "editProductionDue":
         if (!shop.canChangeProductionDue(order)) return;
         selection = order.id; workEditor = "due"; render(); view.querySelector("form input")?.focus(); return;
