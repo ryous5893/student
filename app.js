@@ -160,19 +160,34 @@
       ).join("")}</ul></details></div>`;
   }
 
+  function canEditWorkInterruption(order) {
+    return ["ready", "printing", "finishing"].includes(order.status);
+  }
+
+  function renderWorkInterruption(order) {
+    const memo = order.workInterruption;
+    if (!memo?.reason) return "—";
+    return `<div>${esc(memo.reason)}</div><div>再開予定：${esc(memo.resumeDate) || "未定"}</div>`;
+  }
+
   function renderWork() {
     const candidates = shop.manufacturingOrders(state.orders);
     const nextLabel = { ready: "印刷を開始", printing: "加工へ進む", finishing: "検品完了" };
     const order = candidates.find(item => item.id === selection);
-    const form = order && workEditor === "due" ? `<form class="panel" data-form="productionDue"><h2>注文 ${order.id} の納期変更</h2>
+    const form = order && workEditor === "interruption" ? `<form class="panel" data-form="workInterruption"><h2>注文 ${order.id} の作業中断メモ</h2><div class="grid">
+      ${field("中断理由", "interruptionReason", order.workInterruption?.reason, "text", "required maxlength=300")}
+      ${field("再開予定日（未定なら空欄）", "resumeDate", order.workInterruption?.resumeDate, "date")}
+      </div><div class="actions"><button>メモを保存</button>${order.workInterruption ? button("メモを解除", "clearWorkInterruption", order.id) : ""}${button("閉じる", "clear", order.id)}</div></form>`
+      : order && workEditor === "due" ? `<form class="panel" data-form="productionDue"><h2>注文 ${order.id} の納期変更</h2>
       <p>注文者：${esc(order.customer)} ／ 現在の納期：${esc(order.due)}</p>
       ${field("新しい希望納期", "due", order.due, "date", "required")}
       <div class="actions"><button>変更を保存</button>${button("閉じる", "clear", order.id)}</div></form>`
       : order ? `<form class="panel" data-form="owner"><h2>注文 ${order.id} の製造担当</h2><div class="grid">
       ${field("担当者", "owner", order.workOwner, "text", "required maxlength=50")}</div>
       <div class="actions"><button>担当を保存</button></div></form>` : "";
-    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "担当", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
+    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "担当", "作業中断メモ", "検品取り消し履歴", "操作"], candidates.map(item => [
+      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
+      (canEditWorkInterruption(item) ? button("中断メモ", "editWorkInterruption", item.id) : "") +
       (shop.canChangeProductionDue(item) ? button("納期を変更", "editProductionDue", item.id) : "") +
       (nextLabel[item.status] ? button(nextLabel[item.status], "advance", item.id) : "") +
       (item.status === "inspected" ? button("加工中に戻す", "revertInspection", item.id) : "")
@@ -235,6 +250,23 @@
       return;
     }
     const order = state.orders.find(item => item.id === selection);
+    if (type === "workInterruption") {
+      if (!order || !canEditWorkInterruption(order)) { notice.textContent = "製造待ち・印刷中・加工中の注文だけ中断メモを編集できます。"; return; }
+      const reason = data.get("interruptionReason").trim();
+      const resumeDate = data.get("resumeDate");
+      if (!reason || reason.length > 300) { notice.textContent = "中断理由を1〜300文字で入力してください。"; return; }
+      if (resumeDate) {
+        const date = new Date(resumeDate + "T00:00:00.000Z");
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(resumeDate) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== resumeDate) {
+          notice.textContent = "有効な再開予定日を入力してください。";
+          return;
+        }
+      }
+      order.workInterruption = { reason, resumeDate };
+      selection = null;
+      update("注文 " + order.id + " の作業中断メモを保存しました。");
+      return;
+    }
     if (type === "productionDue") {
       if (!order || !shop.canChangeProductionDue(order)) { notice.textContent = "印刷開始後・納品前の注文だけ納期を変更できます。"; return; }
       const due = data.get("due");
@@ -304,6 +336,14 @@
       case "quote": page = "quotes"; selection = order.id; render(); view.focus(); return;
       case "edit":
       case "choose": selection = order.id; workEditor = "owner"; render(); view.querySelector("form input")?.focus(); return;
+      case "editWorkInterruption":
+        if (!canEditWorkInterruption(order)) return;
+        selection = order.id; workEditor = "interruption"; render(); view.querySelector("form input")?.focus(); return;
+      case "clearWorkInterruption":
+        if (!canEditWorkInterruption(order) || !order.workInterruption) return;
+        if (!window.confirm(`注文 ${order.id} の作業中断メモを解除しますか？`)) return;
+        delete order.workInterruption;
+        break;
       case "editProductionDue":
         if (!shop.canChangeProductionDue(order)) return;
         selection = order.id; workEditor = "due"; render(); view.querySelector("form input")?.focus(); return;
