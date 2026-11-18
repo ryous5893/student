@@ -138,7 +138,7 @@
 
   function renderRates() {
     return `<form class="panel" data-form="rates"><h2>商品別の印刷単価</h2>
-      <p>片面1部あたりの単価です。確定済みの見積には確定時点の金額を表示します。</p>
+      <p>片面1部あたりの単価です。保存前に影響する未確定見積の件数を確認します。確定済みの見積には確定時点の金額を表示します。</p>
       <div class="grid">${Object.entries(shop.products).map(([key, product]) =>
         field(product.name + "（円）", key, state.rates[key], "number", "required min=0 max=100000 step=1")).join("")}</div>
       <div class="actions"><button>単価を保存</button></div></form>`
@@ -198,7 +198,20 @@
       order.workOwner = owner;
     }
     if (type === "rates") {
-      for (const product of Object.keys(shop.products)) state.rates[product] = Number(data.get(product));
+      const nextRates = Object.fromEntries(Object.keys(shop.products).map(product => [product, Number(data.get(product))]));
+      const changedProducts = Object.keys(shop.products).filter(product => nextRates[product] !== Number(state.rates[product]));
+      if (!changedProducts.length) {
+        notice.textContent = "単価は変更されていません。";
+        return;
+      }
+      const affectedCount = state.orders.filter(item =>
+        item.status === "received" && item.quoteSnapshot == null && changedProducts.includes(item.product)
+      ).length;
+      if (!window.confirm(`変更した商品の単価が適用される未確定見積は ${affectedCount} 件です。
+確定済み見積の金額は変わりません。
+
+単価を保存しますか？`)) return;
+      Object.assign(state.rates, nextRates);
     }
     selection = null;
     update("保存しました。");
