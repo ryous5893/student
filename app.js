@@ -97,6 +97,8 @@
 
   function renderOrders() {
     const order = state.orders.find(item => item.id === selection);
+    const pausedPapers = Array.isArray(state.pausedPapers) ? state.pausedPapers : [];
+    const availablePapers = Object.fromEntries(Object.entries(shop.paper).filter(([key]) => !pausedPapers.includes(key) || (order?.status === "received" && order.paper === key)));
     const addressLocked = order?.status === "delivered";
     const addressForm = order && addressSelection ? `<form class="panel" data-form="address">
       <h2>注文 ${order.id} の配送先</h2><div class="grid">
@@ -111,7 +113,7 @@
       ${field("備考", "remarks", order?.remarks, "text", "maxlength=500")}
       ${select("商品", "product", shop.products, order?.product)}
       ${field("部数", "quantity", order?.quantity ?? 100, "number", "required min=1 max=100000 step=1")}
-      ${select("用紙", "paper", shop.paper, order?.paper)}
+      ${select("用紙", "paper", availablePapers, order?.paper)}
       ${select("印刷面", "sides", { single: "片面", double: "両面" }, order?.double ? "double" : "single")}
       ${select("加工", "finish", shop.finish, order?.finish)}
       ${select("納期区分", "speed", { standard: "通常", rush: "特急" }, order?.rush ? "rush" : "standard")}
@@ -295,6 +297,7 @@
       <div class="grid">${Object.entries(shop.products).map(([key, product]) =>
         field(product.name + "（円）", key, state.rates[key], "number", "required min=0 max=100000 step=1")).join("")}</div>
       <div class="actions"><button>単価を保存</button></div></form>`
+      + `<form class="panel" data-form="paperSettings"><h2>用紙の受付設定</h2><div class="grid">${Object.entries(shop.paper).map(([key, item]) => select(item.name, key, { active: "利用可能", paused: "一時停止" }, (state.pausedPapers ?? []).includes(key) ? "paused" : "active")).join("")}</div><div class="actions"><button>用紙の設定を保存</button></div></form>`
       + table(["用紙", "1部あたり"], Object.values(shop.paper).map(item => [esc(item.name), money(item.unit)]))
       + table(["加工", "1注文あたり"], Object.values(shop.finish).map(item => [esc(item.name), money(item.fee)]));
   }
@@ -399,6 +402,13 @@
       update("注文 " + order.id + " の作業中断メモを保存しました。");
       return;
     }
+    if (type === "paperSettings") {
+      const keys = Object.keys(shop.paper);
+      if (keys.some(key => !["active", "paused"].includes(data.get(key)))) { notice.textContent = "用紙の設定を選択してください。"; return; }
+      state.pausedPapers = keys.filter(key => data.get(key) === "paused");
+      update("用紙の受付設定を保存しました。");
+      return;
+    }
     if (type === "productionDue") {
       if (!order || !shop.canChangeProductionDue(order)) { notice.textContent = "印刷開始後・納品前の注文だけ納期を変更できます。"; return; }
       const due = data.get("due");
@@ -416,6 +426,9 @@
         paper: data.get("paper"), double: data.get("sides") === "double", finish: data.get("finish"),
         rush: data.get("speed") === "rush", due: data.get("due"), delivery: data.get("delivery"), address: data.get("address").trim(), phone: data.get("phone").trim(), remarks: data.get("remarks").trim()
       };
+      const pausedPapers = Array.isArray(state.pausedPapers) ? state.pausedPapers : [];
+      const keepsExistingPaper = order?.status === "received" && order.paper === fields.paper;
+      if (!Object.hasOwn(shop.paper, fields.paper) || (pausedPapers.includes(fields.paper) && !keepsExistingPaper)) { notice.textContent = "受付可能な用紙を選択してください。"; return; }
       if (!Object.hasOwn(intakeChannels, fields.intakeChannel)) { notice.textContent = "受付経路を選択してください。"; return; }
       if (!fields.customer || (fields.delivery === "ship" && !fields.address)) {
         notice.textContent = "注文者と、配送の場合は配送先を入力してください。";
