@@ -74,6 +74,7 @@
   function renderOrders() {
     const order = state.orders.find(item => item.id === selection);
     const filteredOrders = state.orders.filter(item => !orderNumberFilter || String(item.id) === orderNumberFilter);
+    const totalQuantity = filteredOrders.reduce((total, item) => total + Number(item.quantity), 0);
     return `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2>
       <p>カードの新規注文は50部以上で受け付けます。</p><div class="grid">
       ${field("注文者", "customer", order?.customer, "text", "required maxlength=100")}
@@ -94,7 +95,7 @@
       + table(["注文", "注文者", "商品", "部数", "状態", "納期", "操作"], filteredOrders.map(item => [
         ...orderCells(item), esc(item.due),
         (item.status === "received" ? button("編集", "edit", item.id) : "") + button("見積へ", "quote", item.id)
-      ]));
+      ])) + `<p class="summary" role="status">表示中の合計部数：${new Intl.NumberFormat("ja-JP").format(totalQuantity)}部</p>`;
   }
 
   function renderQuotes() {
