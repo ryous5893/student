@@ -50,6 +50,34 @@
     return true;
   }
 
+  function recordStageOwner(order, at) {
+    const owner = String(order.workOwner ?? "").trim();
+    if (!owner) return;
+    const history = Array.isArray(order.workOwnerHistory) ? order.workOwnerHistory : [];
+    const latest = history[history.length - 1];
+    if (latest?.stage === order.status && latest.owner === owner) return;
+    order.workOwnerHistory = [...history, { stage: order.status, owner, at }];
+  }
+
+  function assignWorkOwner(order, owner, at = new Date().toISOString()) {
+    if (!["returned", "ready", "printing", "finishing", "inspected"].includes(order.status) || typeof owner !== "string") return false;
+    owner = owner.trim();
+    if (!owner || owner.length > 50) return false;
+    recordStageOwner(order, at);
+    order.workOwner = owner;
+    recordStageOwner(order, at);
+    return true;
+  }
+
+  function advanceWork(order, at = new Date().toISOString()) {
+    const next = { ready: "printing", printing: "finishing", finishing: "inspected" }[order.status];
+    if (typeof next !== "string") return false;
+    recordStageOwner(order, at);
+    order.status = next;
+    recordStageOwner(order, at);
+    return true;
+  }
+
   function seed() {
     const common = {
       product: "flyer", quantity: 300, paper: "standard", double: false, finish: "none",
@@ -72,7 +100,7 @@
     return { orders, rates, nextId: 107 };
   }
 
-  const api = { status, products, paper, finish, delivery, quote, manufacturingOrders, revertInspection, canChangeProductionDue, changeProductionDue, seed };
+  const api = { status, products, paper, finish, delivery, quote, manufacturingOrders, revertInspection, canChangeProductionDue, changeProductionDue, assignWorkOwner, advanceWork, seed };
   globalThis.PrintShop = api;
   if (typeof module !== "undefined") module.exports = api;
 })();

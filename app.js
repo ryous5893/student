@@ -27,6 +27,7 @@
   let proofSelectionMode = "upload";
   let workEditor = "owner";
   let orderNumberFilter = "";
+  let statusFilter = "all";
   let proofFilter = "all";
 
   function load() {
@@ -92,7 +93,8 @@
 
   function renderOrders() {
     const order = state.orders.find(item => item.id === selection);
-    const filteredOrders = state.orders.filter(item => !orderNumberFilter || String(item.id) === orderNumberFilter);
+    const filteredOrders = state.orders.filter(item =>
+      (!orderNumberFilter || String(item.id) === orderNumberFilter) && (statusFilter === "all" || item.status === statusFilter));
     const totalQuantity = filteredOrders.reduce((total, item) => total + Number(item.quantity), 0);
     return `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2>
       <p>カードの新規注文は50部以上で受け付けます。</p><div class="grid">
@@ -107,8 +109,9 @@
       ${select("納品方法", "delivery", shop.delivery, order?.delivery)}
       ${field("配送先", "address", order?.address, "text", "maxlength=200")}
       </div><div class="actions"><button>注文を保存</button>${order ? button("編集を閉じる", "clear", order.id) : ""}</div></form>`
-      + `<form class="panel" data-form="orderFilter"><h2>注文番号で絞り込み</h2>
+      + `<form class="panel" data-form="orderFilter"><h2>注文の絞り込み</h2><div class="grid">
         ${field("注文番号", "orderNumber", orderNumberFilter, "search", "inputmode=numeric")}
+        ${select("状態", "statusFilter", { all: "すべて", ...shop.status }, statusFilter)}</div>
         <div class="actions"><button>絞り込む</button><button class="secondary" name="filterAction" value="clear">絞り込みを解除</button></div>
         </form><p role="status">表示件数：${filteredOrders.length}件</p>`
       + table(["注文", "注文者", "商品", "部数", "状態", "納期", "操作"], filteredOrders.map(item => [
@@ -149,8 +152,9 @@
         ${field("原稿ファイル名", "file", "", "text", "required maxlength=150")}
         </div><div class="actions"><button>入稿を記録</button></div></form>` : "";
     return filterForm + form + `<p role="status">表示件数：${filtered.length}件</p>`
-      + table(["注文", "注文者", "商品", "部数", "状態", "原稿", "版・確認状況", "入稿・差し替え日時", "確認メモ", "差し戻し履歴", "操作"], filtered.map(item => [
+      + table(["注文", "注文者", "商品", "部数", "状態", "原稿", "直前の版", "版・確認状況", "入稿・差し替え日時", "確認メモ", "差し戻し履歴", "操作"], filtered.map(item => [
       ...orderCells(item), item.proofFile ? esc(item.proofFile) : "未入稿",
+      item.proofHistory?.length ? (previous => `第${esc(previous.revision)}版 ・ ${esc(previous.file)}`)(item.proofHistory.at(-1)) : "—",
       item.proofFile ? `第${esc(item.revision)}版${item.status === "proof" ? "（確認中）" : item.status === "returned" ? "（差し戻し）" : ""}` : "—",
       esc(formatDateTime(item.proofUpdatedAt)), esc(item.reviewMemo),
       item.returnReasons.map(entry => `第${entry.revision}版: ${esc(entry.reason)}`).join("<br>") || "なし",
@@ -192,6 +196,16 @@
     return `<div>${esc(memo.reason)}</div><div>再開予定：${esc(memo.resumeDate) || "未定"}</div>`;
   }
 
+  function renderWorkOwnerHistory(order) {
+    const history = Array.isArray(order.workOwnerHistory) ? order.workOwnerHistory : [];
+    const printing = history.slice().reverse().find(entry => entry.stage === "printing");
+    const summary = `<div>印刷担当：${printing ? esc(printing.owner) : "未記録"}</div>`;
+    if (!history.length) return summary;
+    return summary + `<details><summary>担当履歴（${history.length}件）</summary><ul>${history.map(entry =>
+      `<li>${esc(shop.status[entry.stage] ?? entry.stage)}：${esc(entry.owner)}（記録日時：${esc(formatDateTime(entry.at))}）</li>`
+    ).join("")}</ul></details>`;
+  }
+
   function renderWork() {
     const candidates = shop.manufacturingOrders(state.orders);
     const nextLabel = { ready: "印刷を開始", printing: "加工へ進む", finishing: "検品完了" };
@@ -207,8 +221,8 @@
       : order ? `<form class="panel" data-form="owner"><h2>注文 ${order.id} の製造担当</h2><div class="grid">
       ${field("担当者", "owner", order.workOwner, "text", "required maxlength=50")}</div>
       <div class="actions"><button>担当を保存</button></div></form>` : "";
-    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "担当", "作業中断メモ", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
+    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "現在の担当", "工程ごとの担当履歴", "作業中断メモ", "検品取り消し履歴", "操作"], candidates.map(item => [
+      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkOwnerHistory(item), renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
       (canEditWorkInterruption(item) ? button("中断メモ", "editWorkInterruption", item.id) : "") +
       (shop.canChangeProductionDue(item) ? button("納期を変更", "editProductionDue", item.id) : "") +
       (nextLabel[item.status] ? button(nextLabel[item.status], "advance", item.id) : "") +
@@ -218,8 +232,8 @@
 
   function renderDelivery() {
     const candidates = state.orders.filter(order => ["inspected", "delivered"].includes(order.status));
-    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address),
+    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "工程ごとの担当履歴", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
+      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address), renderWorkOwnerHistory(item),
       (item.history ?? []).map(entry =>
         `${esc(formatDateTime(entry.at))} ${esc(entry.operator)}：${esc(entry.reason)}`).join("<br>"),
       renderInspectionHistory(item),
@@ -269,7 +283,9 @@
     const data = new FormData(event.target);
     const type = event.target.dataset.form;
     if (type === "orderFilter") {
-      orderNumberFilter = event.submitter?.value === "clear" ? "" : data.get("orderNumber").trim();
+      const clear = event.submitter?.value === "clear";
+      orderNumberFilter = clear ? "" : data.get("orderNumber").trim();
+      statusFilter = !clear && Object.hasOwn(shop.status, data.get("statusFilter")) ? data.get("statusFilter") : "all";
       render();
       return;
     }
@@ -332,6 +348,9 @@
     if (type === "proof" && order) {
       const file = data.get("file").trim();
       if (!file) { notice.textContent = "原稿ファイル名を入力してください。"; return; }
+      if (order.proofFile) {
+        order.proofHistory = [...(order.proofHistory ?? []), { revision: order.revision, file: order.proofFile, at: order.proofUpdatedAt ?? null }];
+      }
       Object.assign(order, {
         proofFile: file, revision: order.revision + 1, proofUpdatedAt: new Date().toISOString(),
         status: "proof", reviewMemo: ""
@@ -341,9 +360,7 @@
       order.reviewMemo = data.get("reviewMemo").trim();
     }
     if (type === "owner" && order) {
-      const owner = data.get("owner").trim();
-      if (!owner) { notice.textContent = "担当者を入力してください。"; return; }
-      order.workOwner = owner;
+      if (!shop.assignWorkOwner(order, data.get("owner"))) { notice.textContent = "担当者を1〜50文字で入力してください。"; return; }
     }
     if (type === "rates") {
       const nextRates = Object.fromEntries(Object.keys(shop.products).map(product => [product, Number(data.get(product))]));
@@ -412,7 +429,7 @@
         break;
       }
       case "advance":
-        order.status = { ready: "printing", printing: "finishing", finishing: "inspected" }[order.status];
+        if (!shop.advanceWork(order)) return;
         break;
       case "revertInspection":
         if (order.status !== "inspected") return;
@@ -448,6 +465,7 @@
     if (!window.confirm("このブラウザに保存されている次のデータをサンプルに戻します。\n\n・すべての注文（入力・編集した注文は削除されます）\n・商品・料金設定の印刷単価\n\n元に戻すことはできません。よろしいですか？")) return;
     state = shop.seed();
     orderNumberFilter = "";
+    statusFilter = "all";
     proofFilter = "all";
     selection = null;
     update("サンプルに戻しました。");
