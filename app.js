@@ -24,6 +24,7 @@
   let state = load();
   let page = "orders";
   let selection = null;
+  let proofSelectionMode = "upload";
   let workEditor = "owner";
   let orderNumberFilter = "";
   let statusFilter = "all";
@@ -32,7 +33,21 @@
   function load() {
     try {
       const saved = JSON.parse(localStorage.getItem(storageKey));
-      if (saved && Array.isArray(saved.orders) && saved.rates && Number.isInteger(saved.nextId)) return saved;
+      if (saved && Array.isArray(saved.orders) && saved.rates && Number.isInteger(saved.nextId)) {
+        saved.orders = saved.orders.map(order => {
+          const returnReasons = Array.isArray(order.returnReasons) ? order.returnReasons : [];
+          if (typeof order.note === "string" && order.note.trim()) {
+            returnReasons.push({ revision: order.revision || 1, reason: order.note.trim() });
+          }
+          const { note, ...currentOrder } = order;
+          return {
+            ...currentOrder,
+            reviewMemo: currentOrder.reviewMemo ?? "",
+            returnReasons
+          };
+        });
+        return saved;
+      }
     } catch (error) {
       console.warn("保存データを読み込めませんでした", error);
     }
@@ -129,16 +144,22 @@
     const filterForm = `<form class="panel" data-form="proofFilter"><h2>表示条件</h2>
       ${select("表示対象", "proofScope", { all: "すべて", missing: "確定見積あり・原稿未提出のみ" }, proofFilter)}
       <div class="actions"><button>絞り込む</button></div></form>`;
-    const form = order ? `<form class="panel" data-form="proof"><h2>注文 ${order.id} の入稿</h2><div class="grid">
-      ${field("原稿ファイル名", "file", "", "text", "required maxlength=150")}
-      </div><div class="actions"><button>入稿を記録</button></div></form>` : "";
+    const form = order && proofSelectionMode === "memo"
+      ? `<form class="panel" data-form="memo"><h2>注文 ${order.id} の確認メモ</h2>
+        <label>確認メモ<textarea name="reviewMemo" maxlength="1000">${esc(order.reviewMemo)}</textarea></label>
+        <div class="actions"><button>メモを保存</button></div></form>`
+      : order ? `<form class="panel" data-form="proof"><h2>注文 ${order.id} の入稿</h2><div class="grid">
+        ${field("原稿ファイル名", "file", "", "text", "required maxlength=150")}
+        </div><div class="actions"><button>入稿を記録</button></div></form>` : "";
     return filterForm + form + `<p role="status">表示件数：${filtered.length}件</p>`
-      + table(["注文", "注文者", "商品", "部数", "状態", "原稿", "直前の版", "版・確認状況", "入稿・差し替え日時", "確認メモ", "操作"], filtered.map(item => [
+      + table(["注文", "注文者", "商品", "部数", "状態", "原稿", "直前の版", "版・確認状況", "入稿・差し替え日時", "確認メモ", "差し戻し履歴", "操作"], filtered.map(item => [
       ...orderCells(item), item.proofFile ? esc(item.proofFile) : "未入稿",
       item.proofHistory?.length ? (previous => `第${esc(previous.revision)}版 ・ ${esc(previous.file)}`)(item.proofHistory.at(-1)) : "—",
       item.proofFile ? `第${esc(item.revision)}版${item.status === "proof" ? "（確認中）" : item.status === "returned" ? "（差し戻し）" : ""}` : "—",
-      esc(formatDateTime(item.proofUpdatedAt)), esc(item.note),
+      esc(formatDateTime(item.proofUpdatedAt)), esc(item.reviewMemo),
+      item.returnReasons.map(entry => `第${entry.revision}版: ${esc(entry.reason)}`).join("<br>") || "なし",
       button(item.status === "quoted" ? "入稿" : "再入稿", "choose", item.id) +
+      button("メモ編集", "editMemo", item.id) +
       (item.status === "proof" ? button("承認", "approve", item.id) + button("差し戻す", "returnProof", item.id) : "")
     ]));
   }
@@ -319,7 +340,10 @@
         return;
       }
       if (order?.status === "received") Object.assign(order, fields);
-      else state.orders.push({ ...fields, id: state.nextId++, status: "received", proofFile: "", revision: 0, proofUpdatedAt: null, note: "", workOwner: "", quoteSnapshot: null });
+      else state.orders.push({
+        ...fields, id: state.nextId++, status: "received", proofFile: "", revision: 0, proofUpdatedAt: null,
+        reviewMemo: "", returnReasons: [], workOwner: "", quoteSnapshot: null
+      });
     }
     if (type === "proof" && order) {
       const file = data.get("file").trim();
@@ -327,7 +351,13 @@
       if (order.proofFile) {
         order.proofHistory = [...(order.proofHistory ?? []), { revision: order.revision, file: order.proofFile, at: order.proofUpdatedAt ?? null }];
       }
-      Object.assign(order, { proofFile: file, revision: order.revision + 1, proofUpdatedAt: new Date().toISOString(), status: "proof" });
+      Object.assign(order, {
+        proofFile: file, revision: order.revision + 1, proofUpdatedAt: new Date().toISOString(),
+        status: "proof", reviewMemo: ""
+      });
+    }
+    if (type === "memo" && order) {
+      order.reviewMemo = data.get("reviewMemo").trim();
     }
     if (type === "owner" && order) {
       if (!shop.assignWorkOwner(order, data.get("owner"))) { notice.textContent = "担当者を1〜50文字で入力してください。"; return; }
@@ -361,7 +391,19 @@
     switch (action) {
       case "quote": page = "quotes"; selection = order.id; render(); view.focus(); return;
       case "edit":
-      case "choose": selection = order.id; workEditor = "owner"; render(); view.querySelector("form input")?.focus(); return;
+      case "choose":
+        selection = order.id;
+        workEditor = "owner";
+        proofSelectionMode = "upload";
+        render();
+        view.querySelector("form input")?.focus();
+        return;
+      case "editMemo":
+        selection = order.id;
+        proofSelectionMode = "memo";
+        render();
+        view.querySelector("form textarea")?.focus();
+        return;
       case "editWorkInterruption":
         if (!canEditWorkInterruption(order)) return;
         selection = order.id; workEditor = "interruption"; render(); view.querySelector("form input")?.focus(); return;
@@ -382,7 +424,8 @@
       case "returnProof": {
         const note = window.prompt("差し戻し理由を入力してください");
         if (!note?.trim()) return;
-        Object.assign(order, { status: "returned", note: note.trim() });
+        order.returnReasons.push({ revision: order.revision, reason: note.trim() });
+        order.status = "returned";
         break;
       }
       case "advance":
