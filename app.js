@@ -24,6 +24,7 @@
   let state = load();
   let page = "orders";
   let selection = null;
+  let addressSelection = false;
   let proofSelectionMode = "upload";
   let workEditor = "owner";
   let orderNumberFilter = "";
@@ -95,14 +96,18 @@
 
   function renderOrders() {
     const order = state.orders.find(item => item.id === selection);
-    const filteredOrders = state.orders.filter(item =>
-      (!orderNumberFilter || String(item.id) === orderNumberFilter) && (statusFilter === "all" || item.status === statusFilter));
-    const totalQuantity = filteredOrders.reduce((total, item) => total + Number(item.quantity), 0);
-    return `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2>
+    const addressLocked = order?.status === "delivered";
+    const addressForm = order && addressSelection ? `<form class="panel" data-form="address">
+      <h2>注文 ${order.id} の配送先</h2><div class="grid">
+      ${field("配送先", "address", order.address, "text", `maxlength=200 ${addressLocked ? "disabled" : "required"}`)}
+      </div>${addressLocked ? '<p class="lock-reason" role="status">納品（出荷）完了後のため、配送先は変更できません。</p>' : ""}
+      <div class="actions">${addressLocked ? "" : "<button>配送先を保存</button>"}${button("編集を閉じる", "clear", order.id)}</div></form>` : "";
+    const orderForm = addressSelection ? "" : `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2>
       <p>カードの新規注文は50部以上で受け付けます。</p><div class="grid">
       ${field("注文者", "customer", order?.customer, "text", "required maxlength=100")}
       ${select("受付経路", "intakeChannel", intakeChannels, order?.intakeChannel ?? "")}
       ${field("連絡先電話番号", "phone", order?.phone, "tel", "maxlength=30")}
+      ${field("備考", "remarks", order?.remarks, "text", "maxlength=500")}
       ${select("商品", "product", shop.products, order?.product)}
       ${field("部数", "quantity", order?.quantity ?? 100, "number", "required min=1 max=100000 step=1")}
       ${select("用紙", "paper", shop.paper, order?.paper)}
@@ -112,15 +117,20 @@
       ${field("希望納期", "due", order?.due, "date", "required")}
       ${select("納品方法", "delivery", shop.delivery, order?.delivery)}
       ${field("配送先", "address", order?.address, "text", "maxlength=200")}
-      </div><div class="actions"><button>注文を保存</button>${order ? button("編集を閉じる", "clear", order.id) : ""}</div></form>`
+      </div><div class="actions"><button>注文を保存</button>${order ? button("編集を閉じる", "clear", order.id) : ""}</div></form>`;
+    const filteredOrders = state.orders.filter(item =>
+      (!orderNumberFilter || String(item.id) === orderNumberFilter) && (statusFilter === "all" || item.status === statusFilter));
+    const totalQuantity = filteredOrders.reduce((total, item) => total + Number(item.quantity), 0);
+    return addressForm + orderForm
       + `<form class="panel" data-form="orderFilter"><h2>注文の絞り込み</h2><div class="grid">
         ${field("注文番号", "orderNumber", orderNumberFilter, "search", "inputmode=numeric")}
         ${select("状態", "statusFilter", { all: "すべて", ...shop.status }, statusFilter)}</div>
         <div class="actions"><button>絞り込む</button><button class="secondary" name="filterAction" value="clear">絞り込みを解除</button></div>
         </form><p role="status">表示件数：${filteredOrders.length}件</p>`
-      + table(["注文", "注文者", "商品", "部数", "状態", "納期", "受付経路", "操作"], filteredOrders.map(item => [
-        ...orderCells(item), esc(item.due), esc(intakeChannels[item.intakeChannel] ?? "未設定"),
-        (item.status === "received" ? button("編集", "edit", item.id) : "") + button("見積へ", "quote", item.id)
+      + table(["注文", "注文者", "商品", "部数", "状態", "納期", "備考", "受付経路", "操作"], filteredOrders.map(item => [
+        ...orderCells(item), esc(item.due), esc(item.remarks) || "—", esc(intakeChannels[item.intakeChannel] ?? "未設定"),
+        (item.status === "received" ? button("編集", "edit", item.id) : "") +
+        (item.delivery === "ship" ? button("配送先を編集", "address", item.id) : "") + button("見積へ", "quote", item.id)
       ])) + `<p class="summary" role="status">表示中の合計部数：${new Intl.NumberFormat("ja-JP").format(totalQuantity)}部</p>`;
   }
 
@@ -217,6 +227,14 @@
     return `<div>${esc(memo.reason)}</div><div>再開予定：${esc(memo.resumeDate) || "未定"}</div>`;
   }
 
+  function renderApproval(order) {
+    const approval = order.approvals?.at(-1);
+    if (!approval) return "—";
+    return `<div>第${esc(approval.revision)}版 ・ ${esc(approval.file)}</div>`
+      + `<div>${approval.double ? "両面" : "片面"} ／ ${esc(shop.finish[approval.finish]?.name ?? approval.finish)}</div>`
+      + `<div>${esc(formatDateTime(approval.at))}</div>`;
+  }
+
   function renderWorkOwnerHistory(order) {
     const history = Array.isArray(order.workOwnerHistory) ? order.workOwnerHistory : [];
     const printing = history.slice().reverse().find(entry => entry.stage === "printing");
@@ -242,8 +260,8 @@
       : order ? `<form class="panel" data-form="owner"><h2>注文 ${order.id} の製造担当</h2><div class="grid">
       ${field("担当者", "owner", order.workOwner, "text", "required maxlength=50")}</div>
       <div class="actions"><button>担当を保存</button></div></form>` : "";
-    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "現在の担当", "工程ごとの担当履歴", "作業中断メモ", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkOwnerHistory(item), renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
+    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "現在の担当", "工程ごとの担当履歴", "承認内容", "作業中断メモ", "検品取り消し履歴", "操作"], candidates.map(item => [
+      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkOwnerHistory(item), renderApproval(item), renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
       (canEditWorkInterruption(item) ? button("中断メモ", "editWorkInterruption", item.id) : "") +
       (shop.canChangeProductionDue(item) ? button("納期を変更", "editProductionDue", item.id) : "") +
       (nextLabel[item.status] ? button(nextLabel[item.status], "advance", item.id) : "") +
@@ -253,8 +271,8 @@
 
   function renderDelivery() {
     const candidates = state.orders.filter(order => ["inspected", "delivered"].includes(order.status));
-    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "連絡先電話番号", "工程ごとの担当履歴", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address), esc(item.phone) || "未登録", renderWorkOwnerHistory(item),
+    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "連絡先電話番号", "工程ごとの担当履歴", "承認内容", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
+      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address), esc(item.phone) || "未登録", renderWorkOwnerHistory(item), renderApproval(item),
       (item.history ?? []).map(entry =>
         `${esc(formatDateTime(entry.at))} ${esc(entry.operator)}：${esc(entry.reason)}`).join("<br>"),
       renderInspectionHistory(item),
@@ -294,6 +312,7 @@
     if (!(next in views)) return;
     page = next;
     selection = null;
+    addressSelection = false;
     notice.textContent = "";
     render();
     nav.querySelector('[aria-current="page"]').focus();
@@ -317,6 +336,22 @@
       return;
     }
     const order = state.orders.find(item => item.id === selection);
+    if (type === "address" && order) {
+      if (order.status === "delivered") {
+        notice.textContent = "納品（出荷）完了後のため、配送先は変更できません。";
+        return;
+      }
+      const address = data.get("address").trim();
+      if (order.delivery === "ship" && !address) {
+        notice.textContent = "配送先を入力してください。";
+        return;
+      }
+      order.address = address;
+      selection = null;
+      addressSelection = false;
+      update("注文 " + order.id + " の配送先を保存しました。");
+      return;
+    }
     if (type === "manualDiscount") {
       if (!order || order.status !== "received") { notice.textContent = "見積確定前の注文だけ値引きを設定できます。"; return; }
       if (event.submitter?.value === "clear") {
@@ -364,7 +399,7 @@
       const fields = {
         customer: data.get("customer").trim(), intakeChannel: data.get("intakeChannel"), product: data.get("product"), quantity: Number(data.get("quantity")),
         paper: data.get("paper"), double: data.get("sides") === "double", finish: data.get("finish"),
-        rush: data.get("speed") === "rush", due: data.get("due"), delivery: data.get("delivery"), address: data.get("address").trim(), phone: data.get("phone").trim()
+        rush: data.get("speed") === "rush", due: data.get("due"), delivery: data.get("delivery"), address: data.get("address").trim(), phone: data.get("phone").trim(), remarks: data.get("remarks").trim()
       };
       if (!Object.hasOwn(intakeChannels, fields.intakeChannel)) { notice.textContent = "受付経路を選択してください。"; return; }
       if (!fields.customer || (fields.delivery === "ship" && !fields.address)) {
@@ -417,6 +452,7 @@
       Object.assign(state.rates, nextRates);
     }
     selection = null;
+    addressSelection = false;
     update("保存しました。");
   });
 
@@ -427,15 +463,19 @@
     const order = state.orders.find(item => item.id === Number(id));
     if (!order) return;
     switch (action) {
-      case "quote": page = "quotes"; selection = order.id; render(); view.focus(); return;
+      case "quote": page = "quotes"; selection = order.id; addressSelection = false; render(); view.focus(); return;
       case "edit":
       case "choose":
+        addressSelection = false;
         selection = order.id;
         workEditor = "owner";
         proofSelectionMode = "upload";
         render();
         view.querySelector("form input")?.focus();
         return;
+      case "address":
+        addressSelection = true;
+        selection = order.id; render(); view.querySelector("form input")?.focus(); return;
       case "editMemo":
         selection = order.id;
         proofSelectionMode = "memo";
@@ -453,14 +493,19 @@
       case "editProductionDue":
         if (!shop.canChangeProductionDue(order)) return;
         selection = order.id; workEditor = "due"; render(); view.querySelector("form input")?.focus(); return;
-      case "clear": selection = null; render(); view.focus(); return;
+      case "clear": selection = null; addressSelection = false; render(); view.focus(); return;
       case "confirmQuote":
         if (order.manualDiscount && !order.manualDiscount.reason?.trim()) { notice.textContent = "値引き理由がないため確定できません。"; return; }
         if (quoteWithManualDiscount(order).total < 0) { notice.textContent = "手入力値引きが見積の合計を超えています。値引き額を見直してください。"; return; }
         order.quoteSnapshot = quoteWithManualDiscount(order);
         order.status = "quoted";
         break;
-      case "approve": order.status = "ready"; break;
+      case "approve":
+        order.approvals = [...(order.approvals ?? []), {
+          revision: order.revision, file: order.proofFile, double: order.double, finish: order.finish, at: new Date().toISOString()
+        }];
+        order.status = "ready";
+        break;
       case "returnProof": {
         const note = window.prompt("差し戻し理由を入力してください");
         if (!note?.trim()) return;
@@ -508,6 +553,7 @@
     statusFilter = "all";
     proofFilter = "all";
     selection = null;
+    addressSelection = false;
     update("サンプルに戻しました。");
   });
 
