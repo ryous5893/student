@@ -1,0 +1,31 @@
+* { box-sizing: border-box; }
+:root { font-family: "Yu Gothic UI", "Meiryo", sans-serif; color: #14282e; background: #f3f6f5; }
+body { margin: 0; }
+.wrap { width: min(1120px, 94%); margin: auto; }
+header { color: #fff; background: #11363d; }
+.mast { display: flex; align-items: center; justify-content: space-between; padding: 19px 0; gap: 12px; }
+.brand { font-size: 1.65rem; font-weight: 750; letter-spacing: .08em; }
+.mast p { margin: 2px 0 0; color: #c6dcdd; }
+nav { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 16px; border-bottom: 1px solid #b9cccb; }
+nav button { color: #18434b; background: transparent; border-radius: 0; border-bottom: 3px solid transparent; }
+nav button[aria-current] { border-bottom-color: #007a71; background: #e0f0ee; }
+h1 { margin: 25px 0 10px; font-size: 1.6rem; }
+h2 { font-size: 1.15rem; }
+p { line-height: 1.55; }
+.panel { background: #fff; border: 1px solid #c9d7d6; padding: 16px; margin: 16px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px,100%), 1fr)); gap: 12px; }
+label { display: grid; gap: 5px; align-content: start; font-size: .92rem; }
+input, select, button { font: inherit; min-height: 38px; padding: 5px 9px; }
+input, select { width: 100%; border: 1px solid #72908f; border-radius: 3px; color: #14282e; background: #fff; }
+button { width: max-content; max-width: 100%; cursor: pointer; border: 1px solid transparent; border-radius: 3px; color: #fff; background: #00665e; font-weight: 650; }
+button.secondary, td button { color: #18434b; background: #e8f2f1; border-color: #b1c9c7; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #a84800; outline-offset: 2px; }
+button + button { margin-left: 4px; }
+.table { overflow-x: auto; margin-bottom: 18px; }
+table { width: 100%; border-collapse: collapse; background: #fff; }
+th, td { padding: 9px 11px; border-bottom: 1px solid #d6e1df; text-align: left; vertical-align: middle; }
+th { background: #dae9e7; white-space: nowrap; }
+td button { white-space: nowrap; }
+#notice { min-height: 2rem; font-weight: 650; color: #094e46; }
+.summary { font-size: 1.3rem; font-weight: 720; }
+.actions { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
