@@ -15,11 +15,12 @@ p { line-height: 1.55; }
 .panel { background: #fff; border: 1px solid #c9d7d6; padding: 16px; margin: 16px 0; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px,100%), 1fr)); gap: 12px; }
 label { display: grid; gap: 5px; align-content: start; font-size: .92rem; }
-input, select, button { font: inherit; min-height: 38px; padding: 5px 9px; }
-input, select { width: 100%; border: 1px solid #72908f; border-radius: 3px; color: #14282e; background: #fff; }
+input, select, textarea, button { font: inherit; min-height: 38px; padding: 5px 9px; }
+input, select, textarea { width: 100%; border: 1px solid #72908f; border-radius: 3px; color: #14282e; background: #fff; }
+textarea { min-height: 100px; resize: vertical; }
 button { width: max-content; max-width: 100%; cursor: pointer; border: 1px solid transparent; border-radius: 3px; color: #fff; background: #00665e; font-weight: 650; }
 button.secondary, td button { color: #18434b; background: #e8f2f1; border-color: #b1c9c7; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #a84800; outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #a84800; outline-offset: 2px; }
 button + button { margin-left: 4px; }
 .table { overflow-x: auto; margin-bottom: 18px; }
 table { width: 100%; border-collapse: collapse; background: #fff; }
@@ -27,5 +28,17 @@ th, td { padding: 9px 11px; border-bottom: 1px solid #d6e1df; text-align: left; 
 th { background: #dae9e7; white-space: nowrap; }
 td button { white-space: nowrap; }
 #notice { min-height: 2rem; font-weight: 650; color: #094e46; }
+.lock-reason { margin: 14px 0 0; padding: 10px 12px; border-left: 4px solid #a84800; color: #743400; background: #fff3e8; font-weight: 650; }
 .summary { font-size: 1.3rem; font-weight: 720; }
 .actions { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.due-change { min-width: 210px; padding: 8px 10px; border-left: 4px solid #b45a00; background: #fff4d8; }
+.due-change strong { display: block; margin-bottom: 4px; color: #783300; }
+.due-change details { margin-top: 6px; }
+
+.workflow-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px,100%), 1fr)); gap: 12px; margin: 16px 0 0; }
+.workflow-counts > div { padding: 12px 16px; border: 1px solid #c9d7d6; background: #fff; }
+.workflow-counts dt { color: #18434b; font-weight: 650; }
+.workflow-counts dd { margin: 4px 0 0; }
+.workflow-counts strong { margin-right: 4px; font-size: 1.6rem; }
+.workflow-counts small { display: block; margin-top: 4px; color: #435f63; }
