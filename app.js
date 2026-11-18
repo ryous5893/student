@@ -267,8 +267,8 @@
       ${field("担当者", "owner", order.workOwner, "text", "required maxlength=50")}</div>
       <div class="actions"><button>担当を保存</button></div></form>` : "";
     return filterForm + form + `<p role="status">表示件数：${filtered.length}件</p>`
-      + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "現在の担当", "工程ごとの担当履歴", "承認内容", "作業中断メモ", "検品取り消し履歴", "操作"], filtered.map(item => [
-      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkOwnerHistory(item), renderApproval(item), renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
+      + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "印刷開始時刻", "現在の担当", "工程ごとの担当履歴", "承認内容", "作業中断メモ", "検品取り消し履歴", "操作"], filtered.map(item => [
+      ...orderCells(item), renderProductionDue(item), item.printStartedAt ? esc(formatDateTime(item.printStartedAt)) : "—", esc(item.workOwner) || "未割当", renderWorkOwnerHistory(item), renderApproval(item), renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
       (canEditWorkInterruption(item) ? button("中断メモ", "editWorkInterruption", item.id) : "") +
       (shop.canChangeProductionDue(item) ? button("納期を変更", "editProductionDue", item.id) : "") +
       (nextLabel[item.status] ? button(nextLabel[item.status], "advance", item.id) : "") +
