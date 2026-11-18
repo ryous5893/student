@@ -26,6 +26,7 @@
   let selection = null;
   let workEditor = "owner";
   let orderNumberFilter = "";
+  let statusFilter = "all";
   let proofFilter = "all";
 
   function load() {
@@ -77,7 +78,8 @@
 
   function renderOrders() {
     const order = state.orders.find(item => item.id === selection);
-    const filteredOrders = state.orders.filter(item => !orderNumberFilter || String(item.id) === orderNumberFilter);
+    const filteredOrders = state.orders.filter(item =>
+      (!orderNumberFilter || String(item.id) === orderNumberFilter) && (statusFilter === "all" || item.status === statusFilter));
     const totalQuantity = filteredOrders.reduce((total, item) => total + Number(item.quantity), 0);
     return `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2>
       <p>カードの新規注文は50部以上で受け付けます。</p><div class="grid">
@@ -92,8 +94,9 @@
       ${select("納品方法", "delivery", shop.delivery, order?.delivery)}
       ${field("配送先", "address", order?.address, "text", "maxlength=200")}
       </div><div class="actions"><button>注文を保存</button>${order ? button("編集を閉じる", "clear", order.id) : ""}</div></form>`
-      + `<form class="panel" data-form="orderFilter"><h2>注文番号で絞り込み</h2>
+      + `<form class="panel" data-form="orderFilter"><h2>注文の絞り込み</h2><div class="grid">
         ${field("注文番号", "orderNumber", orderNumberFilter, "search", "inputmode=numeric")}
+        ${select("状態", "statusFilter", { all: "すべて", ...shop.status }, statusFilter)}</div>
         <div class="actions"><button>絞り込む</button><button class="secondary" name="filterAction" value="clear">絞り込みを解除</button></div>
         </form><p role="status">表示件数：${filteredOrders.length}件</p>`
       + table(["注文", "注文者", "商品", "部数", "状態", "納期", "操作"], filteredOrders.map(item => [
@@ -248,7 +251,9 @@
     const data = new FormData(event.target);
     const type = event.target.dataset.form;
     if (type === "orderFilter") {
-      orderNumberFilter = event.submitter?.value === "clear" ? "" : data.get("orderNumber").trim();
+      const clear = event.submitter?.value === "clear";
+      orderNumberFilter = clear ? "" : data.get("orderNumber").trim();
+      statusFilter = !clear && Object.hasOwn(shop.status, data.get("statusFilter")) ? data.get("statusFilter") : "all";
       render();
       return;
     }
@@ -405,6 +410,7 @@
     if (!window.confirm("このブラウザに保存されている次のデータをサンプルに戻します。\n\n・すべての注文（入力・編集した注文は削除されます）\n・商品・料金設定の印刷単価\n\n元に戻すことはできません。よろしいですか？")) return;
     state = shop.seed();
     orderNumberFilter = "";
+    statusFilter = "all";
     proofFilter = "all";
     selection = null;
     update("サンプルに戻しました。");
