@@ -157,6 +157,7 @@
     const blocks = !order ? "" : `<section class="panel"><h2>注文 ${order.id} ・ ${esc(order.customer)}</h2>${
       table(["項目", "金額"], [
         ["印刷代", money(pricing.printing)], ["用紙代", money(pricing.paperCost)],
+        ["印刷代・用紙代小計（割引前）", money(Number(pricing.printing) + Number(pricing.paperCost))],
         ["加工費", money(pricing.finishing)], ["特急料金", money(pricing.rush)], ["数量割引", money(pricing.discount ? -pricing.discount : 0)],
         ...manualRows
       ])
