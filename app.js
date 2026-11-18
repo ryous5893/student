@@ -116,12 +116,17 @@
       ${field("配送先", "address", order?.address, "text", "maxlength=200")}
       </div><div class="actions"><button>注文を保存</button>${order ? button("編集を閉じる", "clear", order.id) : ""}</div></form>`;
     const filteredOrders = state.orders.filter(item =>
-      (!orderNumberFilter || String(item.id) === orderNumberFilter) && (statusFilter === "all" || item.status === statusFilter));
+      (!orderNumberFilter || String(item.id) === orderNumberFilter) && (statusFilter === "all"
+        || (statusFilter === "undelivered" ? item.status !== "delivered" : item.status === statusFilter)));
+    // 未納品の表示では希望納期の近い順（納期未入力は最後、同日は注文番号順）に並べる
+    if (statusFilter === "undelivered") {
+      filteredOrders.sort((a, b) => (a.due || "9999-12-31").localeCompare(b.due || "9999-12-31") || a.id - b.id);
+    }
     const totalQuantity = filteredOrders.reduce((total, item) => total + Number(item.quantity), 0);
     return addressForm + orderForm
       + `<form class="panel" data-form="orderFilter"><h2>注文の絞り込み</h2><div class="grid">
         ${field("注文番号", "orderNumber", orderNumberFilter, "search", "inputmode=numeric")}
-        ${select("状態", "statusFilter", { all: "すべて", ...shop.status }, statusFilter)}</div>
+        ${select("状態", "statusFilter", { all: "すべて", undelivered: "未納品（希望納期の近い順）", ...shop.status }, statusFilter)}</div>
         <div class="actions"><button>絞り込む</button><button class="secondary" name="filterAction" value="clear">絞り込みを解除</button></div>
         </form><p role="status">表示件数：${filteredOrders.length}件</p>`
       + table(["注文", "注文者", "商品", "部数", "状態", "納期", "備考", "操作"], filteredOrders.map(item => [
@@ -322,7 +327,8 @@
     if (type === "orderFilter") {
       const clear = event.submitter?.value === "clear";
       orderNumberFilter = clear ? "" : data.get("orderNumber").trim();
-      statusFilter = !clear && Object.hasOwn(shop.status, data.get("statusFilter")) ? data.get("statusFilter") : "all";
+      statusFilter = !clear && (data.get("statusFilter") === "undelivered" || Object.hasOwn(shop.status, data.get("statusFilter")))
+        ? data.get("statusFilter") : "all";
       render();
       return;
     }
