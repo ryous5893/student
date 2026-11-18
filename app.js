@@ -171,6 +171,13 @@
     return `<div>${esc(memo.reason)}</div><div>再開予定：${esc(memo.resumeDate) || "未定"}</div>`;
   }
 
+  function renderApproval(order) {
+    const approval = order.approvals?.at(-1);
+    if (!approval) return "—";
+    return `<div>第${esc(approval.revision)}版 ・ ${esc(approval.file)}</div>`
+      + `<div>${approval.double ? "両面" : "片面"} ／ ${esc(shop.finish[approval.finish]?.name ?? approval.finish)}</div>`
+      + `<div>${esc(formatDateTime(approval.at))}</div>`;
+  }
   function renderWork() {
     const candidates = shop.manufacturingOrders(state.orders);
     const nextLabel = { ready: "印刷を開始", printing: "加工へ進む", finishing: "検品完了" };
@@ -186,8 +193,8 @@
       : order ? `<form class="panel" data-form="owner"><h2>注文 ${order.id} の製造担当</h2><div class="grid">
       ${field("担当者", "owner", order.workOwner, "text", "required maxlength=50")}</div>
       <div class="actions"><button>担当を保存</button></div></form>` : "";
-    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "担当", "作業中断メモ", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
+    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "担当", "承認内容", "作業中断メモ", "検品取り消し履歴", "操作"], candidates.map(item => [
+      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderApproval(item), renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
       (canEditWorkInterruption(item) ? button("中断メモ", "editWorkInterruption", item.id) : "") +
       (shop.canChangeProductionDue(item) ? button("納期を変更", "editProductionDue", item.id) : "") +
       (nextLabel[item.status] ? button(nextLabel[item.status], "advance", item.id) : "") +
@@ -197,8 +204,8 @@
 
   function renderDelivery() {
     const candidates = state.orders.filter(order => ["inspected", "delivered"].includes(order.status));
-    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address),
+    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "承認内容", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
+      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address), renderApproval(item),
       (item.history ?? []).map(entry =>
         `${esc(formatDateTime(entry.at))} ${esc(entry.operator)}：${esc(entry.reason)}`).join("<br>"),
       renderInspectionHistory(item),
@@ -361,7 +368,12 @@
         order.quoteSnapshot = shop.quote(order, state.rates);
         order.status = "quoted";
         break;
-      case "approve": order.status = "ready"; break;
+      case "approve":
+        order.approvals = [...(order.approvals ?? []), {
+          revision: order.revision, file: order.proofFile, double: order.double, finish: order.finish, at: new Date().toISOString()
+        }];
+        order.status = "ready";
+        break;
       case "returnProof": {
         const note = window.prompt("差し戻し理由を入力してください");
         if (!note?.trim()) return;
