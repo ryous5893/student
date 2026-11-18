@@ -3,7 +3,10 @@
 body { margin: 0; }
 .wrap { width: min(1120px, 94%); margin: auto; }
 header { color: #fff; background: #11363d; }
-.mast { display: flex; align-items: center; justify-content: space-between; padding: 19px 0; gap: 12px; }
+.mast { display: flex; align-items: center; justify-content: space-between; padding: 19px 0; gap: 12px; flex-wrap: wrap; }
+.mast-actions { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.mast-actions label { color: #fff; }
+.mast-actions select { min-width: 150px; }
 .brand { font-size: 1.65rem; font-weight: 750; letter-spacing: .08em; }
 .mast p { margin: 2px 0 0; color: #c6dcdd; }
 nav { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 16px; border-bottom: 1px solid #b9cccb; }
