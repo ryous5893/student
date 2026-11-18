@@ -30,6 +30,7 @@
   let orderNumberFilter = "";
   let statusFilter = "all";
   let proofFilter = "all";
+  let workOwnerFilter = "all";
 
   function load() {
     try {
@@ -101,6 +102,8 @@
     return [order.id, esc(order.customer), esc(shop.products[order.product].name), order.quantity, shop.status[order.status]];
   }
 
+  const intakeChannels = { "": "未設定", phone: "電話", shop: "店頭", email: "メール" };
+
   function renderOrders() {
     const order = state.orders.find(item => item.id === selection);
     const addressLocked = order?.status === "delivered";
@@ -112,6 +115,7 @@
     const orderForm = addressSelection ? "" : `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2>
       <p>カードの新規注文は50部以上で受け付けます。</p><div class="grid">
       ${field("注文者", "customer", order?.customer, "text", "required maxlength=100")}
+      ${select("受付経路", "intakeChannel", intakeChannels, order?.intakeChannel ?? "")}
       ${field("連絡先電話番号", "phone", order?.phone, "tel", "maxlength=30")}
       ${field("備考", "remarks", order?.remarks, "text", "maxlength=500")}
       ${select("商品", "product", shop.products, order?.product)}
@@ -123,7 +127,7 @@
       ${field("希望納期", "due", order?.due, "date", "required")}
       ${select("納品方法", "delivery", shop.delivery, order?.delivery)}
       ${field("配送先", "address", order?.address, "text", "maxlength=200")}
-      </div><div class="actions"><button>注文を保存</button>${order ? button("編集を閉じる", "clear", order.id) : ""}</div></form>`;
+      </div><p>配送先は配送の場合に必要です。店頭受取の場合は空欄で構いません。</p><div class="actions"><button>注文を保存</button>${order ? button("編集を閉じる", "clear", order.id) : ""}</div></form>`;
     const filteredOrders = state.orders.filter(item =>
       (!orderNumberFilter || String(item.id) === orderNumberFilter) && (statusFilter === "all" || item.status === statusFilter));
     const totalQuantity = filteredOrders.reduce((total, item) => total + Number(item.quantity), 0);
@@ -133,8 +137,8 @@
         ${select("状態", "statusFilter", { all: "すべて", ...shop.status }, statusFilter)}</div>
         <div class="actions"><button>絞り込む</button><button class="secondary" name="filterAction" value="clear">絞り込みを解除</button></div>
         </form><p role="status">表示件数：${filteredOrders.length}件</p>`
-      + table(["注文", "注文者", "商品", "部数", "状態", "納期", "備考", "操作"], filteredOrders.map(item => [
-        ...orderCells(item), renderDue(item.due), esc(item.remarks) || "—",
+      + table(["注文", "注文者", "商品", "部数", "状態", "納期", "備考", "受付経路", "操作"], filteredOrders.map(item => [
+        ...orderCells(item), renderDue(item.due), esc(item.remarks) || "—", esc(intakeChannels[item.intakeChannel] ?? "未設定"),
         (item.status === "received" ? button("編集", "edit", item.id) : "") +
         (item.delivery === "ship" ? button("配送先を編集", "address", item.id) : "") + button("見積へ", "quote", item.id)
       ])) + `<p class="summary" role="status">表示中の合計部数：${new Intl.NumberFormat("ja-JP").format(totalQuantity)}部</p>`;
@@ -162,12 +166,13 @@
     const blocks = !order ? "" : `<section class="panel"><h2>注文 ${order.id} ・ ${esc(order.customer)}</h2>${
       table(["項目", "金額"], [
         ["印刷代", money(pricing.printing)], ["用紙代", money(pricing.paperCost)],
+        ["印刷代・用紙代小計（割引前）", money(Number(pricing.printing) + Number(pricing.paperCost))],
         ["加工費", money(pricing.finishing)], ["特急料金", money(pricing.rush)], ["数量割引", money(pricing.discount ? -pricing.discount : 0)],
         ...manualRows
       ])
     }<p class="summary">合計 ${money(pricing.total)}</p>${
-      order.status === "received" ? button("見積を確定", "confirmQuote", order.id) : "<p>確定済みの見積を表示しています。</p>"
-    }</section>` + manualForm;
+      order.status === "received" ? button("試算を履歴に保存", "saveEstimate", order.id) + button("見積を確定", "confirmQuote", order.id) : "<p>確定済みの見積を表示しています。</p>"
+    }</section>` + manualForm + (order.estimateHistory?.length ? `<section class="panel"><h2>確定前の試算履歴</h2>${table(["記録日時", "条件", "試算額", "区分"], order.estimateHistory.map(entry => [esc(formatDateTime(entry.at)), `${esc(shop.products[entry.product]?.name ?? entry.product)}・${esc(entry.quantity)}部・${esc(shop.paper[entry.paper]?.name ?? entry.paper)}・${entry.double ? "両面" : "片面"}`, money(entry.pricing.total), "未確定の試算"]))}</section>` : "");
     return blocks + table(["注文", "注文者", "商品", "部数", "状態", "操作"], state.orders.map(item =>
       [...orderCells(item), button("見積を見る", "quote", item.id)]
     ));
@@ -253,8 +258,13 @@
 
   function renderWork() {
     const candidates = shop.manufacturingOrders(state.orders);
+    const filtered = workOwnerFilter === "unassigned"
+      ? candidates.filter(item => !String(item.workOwner ?? "").trim()) : candidates;
     const nextLabel = { ready: "印刷を開始", printing: "加工へ進む", finishing: "検品完了" };
-    const order = candidates.find(item => item.id === selection);
+    const order = filtered.find(item => item.id === selection);
+    const filterForm = `<form class="panel" data-form="workOwnerFilter"><h2>表示条件</h2>
+      ${select("表示対象", "ownerScope", { all: "すべて", unassigned: "担当未割当のみ" }, workOwnerFilter)}
+      <div class="actions"><button>絞り込む</button></div></form>`;
     const form = order && workEditor === "interruption" ? `<form class="panel" data-form="workInterruption"><h2>注文 ${order.id} の作業中断メモ</h2><div class="grid">
       ${field("中断理由", "interruptionReason", order.workInterruption?.reason, "text", "required maxlength=300")}
       ${field("再開予定日（未定なら空欄）", "resumeDate", order.workInterruption?.resumeDate, "date")}
@@ -266,7 +276,8 @@
       : order ? `<form class="panel" data-form="owner"><h2>注文 ${order.id} の製造担当</h2><div class="grid">
       ${field("担当者", "owner", order.workOwner, "text", "required maxlength=50")}</div>
       <div class="actions"><button>担当を保存</button></div></form>` : "";
-    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "現在の担当", "工程ごとの担当履歴", "承認内容", "作業中断メモ", "検品取り消し履歴", "操作"], candidates.map(item => [
+    return filterForm + form + `<p role="status">表示件数：${filtered.length}件</p>`
+      + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "現在の担当", "工程ごとの担当履歴", "承認内容", "作業中断メモ", "検品取り消し履歴", "操作"], filtered.map(item => [
       ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkOwnerHistory(item), renderApproval(item), renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
       (canEditWorkInterruption(item) ? button("中断メモ", "editWorkInterruption", item.id) : "") +
       (shop.canChangeProductionDue(item) ? button("納期を変更", "editProductionDue", item.id) : "") +
@@ -278,7 +289,7 @@
   function renderDelivery() {
     const candidates = state.orders.filter(order => ["inspected", "delivered"].includes(order.status));
     return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "連絡先電話番号", "工程ごとの担当履歴", "承認内容", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address), esc(item.phone) || "未登録", renderWorkOwnerHistory(item), renderApproval(item),
+      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address) || (item.delivery === "pickup" ? "不要（店頭受取）" : "未登録"), esc(item.phone) || "未登録", renderWorkOwnerHistory(item), renderApproval(item),
       (item.history ?? []).map(entry =>
         `${esc(formatDateTime(entry.at))} ${esc(entry.operator)}：${esc(entry.reason)}`).join("<br>"),
       renderInspectionHistory(item),
@@ -337,6 +348,12 @@
     }
     if (type === "proofFilter") {
       proofFilter = data.get("proofScope") === "missing" ? "missing" : "all";
+      selection = null;
+      render();
+      return;
+    }
+    if (type === "workOwnerFilter") {
+      workOwnerFilter = data.get("ownerScope") === "unassigned" ? "unassigned" : "all";
       selection = null;
       render();
       return;
@@ -401,12 +418,14 @@
       update("注文 " + order.id + " の納期を変更しました。");
       return;
     }
+    let savedMessage = "保存しました。";
     if (type === "order") {
       const fields = {
-        customer: data.get("customer").trim(), product: data.get("product"), quantity: Number(data.get("quantity")),
+        customer: data.get("customer").trim(), intakeChannel: data.get("intakeChannel"), product: data.get("product"), quantity: Number(data.get("quantity")),
         paper: data.get("paper"), double: data.get("sides") === "double", finish: data.get("finish"),
         rush: data.get("speed") === "rush", due: data.get("due"), delivery: data.get("delivery"), address: data.get("address").trim(), phone: data.get("phone").trim(), remarks: data.get("remarks").trim()
       };
+      if (!Object.hasOwn(intakeChannels, fields.intakeChannel)) { notice.textContent = "受付経路を選択してください。"; return; }
       if (!fields.customer || (fields.delivery === "ship" && !fields.address)) {
         notice.textContent = "注文者と、配送の場合は配送先を入力してください。";
         return;
@@ -417,11 +436,17 @@
         notice.textContent = "カードの注文は50部以上で入力してください。";
         return;
       }
-      if (order?.status === "received") Object.assign(order, fields);
-      else state.orders.push({
-        ...fields, id: state.nextId++, status: "received", proofFile: "", revision: 0, proofUpdatedAt: null,
-        reviewMemo: "", returnReasons: [], workOwner: "", quoteSnapshot: null
-      });
+      if (order?.status === "received") {
+        Object.assign(order, fields);
+        savedMessage = `注文番号 ${order.id} の注文を保存しました。`;
+      } else {
+        const id = state.nextId++;
+        state.orders.push({
+          ...fields, id, status: "received", proofFile: "", revision: 0, proofUpdatedAt: null,
+          reviewMemo: "", returnReasons: [], workOwner: "", quoteSnapshot: null
+        });
+        savedMessage = `注文番号 ${id} で注文を登録しました。`;
+      }
     }
     if (type === "proof" && order) {
       const file = data.get("file").trim();
@@ -458,7 +483,7 @@
     }
     selection = null;
     addressSelection = false;
-    update("保存しました。");
+    update(savedMessage);
   });
 
   view.addEventListener("click", event => {
@@ -499,6 +524,14 @@
         if (!shop.canChangeProductionDue(order)) return;
         selection = order.id; workEditor = "due"; render(); view.querySelector("form input")?.focus(); return;
       case "clear": selection = null; addressSelection = false; render(); view.focus(); return;
+      case "saveEstimate": {
+        if (order.status !== "received") return;
+        const pricing = quoteWithManualDiscount(order);
+        if (pricing.total < 0) { notice.textContent = "値引き額を見直してください。"; return; }
+        const history = Array.isArray(order.estimateHistory) ? order.estimateHistory : [];
+        order.estimateHistory = [...history, { at: new Date().toISOString(), product: order.product, quantity: order.quantity, paper: order.paper, double: order.double, finish: order.finish, rush: order.rush, unitPrice: state.rates[order.product], pricing }];
+        break;
+      }
       case "confirmQuote":
         if (order.manualDiscount && !order.manualDiscount.reason?.trim()) { notice.textContent = "値引き理由がないため確定できません。"; return; }
         if (quoteWithManualDiscount(order).total < 0) { notice.textContent = "手入力値引きが見積の合計を超えています。値引き額を見直してください。"; return; }
@@ -557,6 +590,7 @@
     orderNumberFilter = "";
     statusFilter = "all";
     proofFilter = "all";
+    workOwnerFilter = "all";
     selection = null;
     addressSelection = false;
     update("サンプルに戻しました。");
