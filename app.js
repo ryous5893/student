@@ -241,7 +241,7 @@
   });
 
   document.querySelector("#reset").addEventListener("click", () => {
-    if (!window.confirm("このブラウザの注文と料金をサンプルに戻しますか？")) return;
+    if (!window.confirm("このブラウザに保存されている次のデータをサンプルに戻します。\n\n・すべての注文（入力・編集した注文は削除されます）\n・商品・料金設定の印刷単価\n\n元に戻すことはできません。よろしいですか？")) return;
     state = shop.seed();
     orderNumberFilter = "";
     selection = null;
