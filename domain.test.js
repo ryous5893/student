@@ -1,7 +1,7 @@
 // 実行: node --test domain.test.js
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { quote, seed, revertInspection, canChangeProductionDue, changeProductionDue } = require("./domain.js");
+const { quote, seed, revertInspection, canChangeProductionDue, changeProductionDue, assignWorkOwner, advanceWork } = require("./domain.js");
 
 const rates = { flyer: 10, poster: 120, card: 16 };
 const flyer = (overrides) => ({
@@ -131,4 +131,55 @@ test("検品取り消し: 二重実行を防ぎ、再検品後も以前の履歴
   assert.equal(order.inspectionHistory.length, 2);
   assert.deepEqual(order.inspectionHistory[0], firstEntry);
   assert.equal(order.inspectionHistory[1].at, "2026-11-18T09:00:00.000Z");
+});
+
+test("工程担当: 加工担当へ変更しても印刷担当と確定見積を保持する", () => {
+  const order = seed().orders.find(item => item.id === 105);
+  const snapshot = structuredClone(order.quoteSnapshot);
+  assignWorkOwner(order, "印刷担当A", "2026-11-18T08:00:00.000Z");
+  advanceWork(order, "2026-11-18T08:10:00.000Z");
+  advanceWork(order, "2026-11-18T09:00:00.000Z");
+  assignWorkOwner(order, "加工担当B", "2026-11-18T09:10:00.000Z");
+  assert.equal(order.status, "finishing");
+  assert.equal(order.workOwner, "加工担当B");
+  assert.equal(order.workOwnerHistory.find(entry => entry.stage === "printing").owner, "印刷担当A");
+  assert.equal(order.workOwnerHistory.at(-1).owner, "加工担当B");
+  assert.deepEqual(order.quoteSnapshot, snapshot);
+});
+
+test("工程担当: 旧データの担当を上書き前に記録し、不明な過去の印刷担当は推定しない", () => {
+  const order = { ...seed().orders[0], status: "printing", workOwner: "以前の担当" };
+  assignWorkOwner(order, "新しい担当", "2026-11-18T08:00:00.000Z");
+  assert.deepEqual(order.workOwnerHistory.map(entry => entry.owner), ["以前の担当", "新しい担当"]);
+  const finishing = { ...seed().orders[0], status: "finishing", workOwner: "加工担当" };
+  assignWorkOwner(finishing, "加工担当");
+  assert.equal(finishing.workOwnerHistory.some(entry => entry.stage === "printing"), false);
+});
+
+test("工程担当: 同じ工程と担当の連続記録を増やさず、担当の交代順を保持する", () => {
+  const order = { ...seed().orders[0], status: "printing", workOwner: "" };
+  assignWorkOwner(order, "A");
+  assignWorkOwner(order, "A");
+  assert.equal(order.workOwnerHistory.length, 1);
+  assignWorkOwner(order, "B");
+  assignWorkOwner(order, "A");
+  advanceWork(order);
+  assert.deepEqual(order.workOwnerHistory.filter(entry => entry.stage === "printing").map(entry => entry.owner), ["A", "B", "A"]);
+  assert.equal(order.status, "finishing");
+});
+
+test("工程担当: 不正な入力や対象外の工程では担当・状態・履歴を変更しない", () => {
+  for (const owner of ["", "   ", "x".repeat(51), null]) {
+    const order = seed().orders.find(item => item.id === 105);
+    const before = structuredClone(order);
+    assert.equal(assignWorkOwner(order, owner), false);
+    assert.deepEqual(order, before);
+  }
+  for (const status of ["received", "quoted", "proof", "delivered", "unknown", "constructor", "__proto__"]) {
+    const order = { ...seed().orders[0], status };
+    const before = structuredClone(order);
+    assert.equal(assignWorkOwner(order, "担当者"), false);
+    assert.equal(advanceWork(order), false);
+    assert.deepEqual(order, before);
+  }
 });

@@ -171,6 +171,16 @@
     return `<div>${esc(memo.reason)}</div><div>再開予定：${esc(memo.resumeDate) || "未定"}</div>`;
   }
 
+  function renderWorkOwnerHistory(order) {
+    const history = Array.isArray(order.workOwnerHistory) ? order.workOwnerHistory : [];
+    const printing = history.slice().reverse().find(entry => entry.stage === "printing");
+    const summary = `<div>印刷担当：${printing ? esc(printing.owner) : "未記録"}</div>`;
+    if (!history.length) return summary;
+    return summary + `<details><summary>担当履歴（${history.length}件）</summary><ul>${history.map(entry =>
+      `<li>${esc(shop.status[entry.stage] ?? entry.stage)}：${esc(entry.owner)}（記録日時：${esc(formatDateTime(entry.at))}）</li>`
+    ).join("")}</ul></details>`;
+  }
+
   function renderWork() {
     const candidates = shop.manufacturingOrders(state.orders);
     const nextLabel = { ready: "印刷を開始", printing: "加工へ進む", finishing: "検品完了" };
@@ -186,8 +196,8 @@
       : order ? `<form class="panel" data-form="owner"><h2>注文 ${order.id} の製造担当</h2><div class="grid">
       ${field("担当者", "owner", order.workOwner, "text", "required maxlength=50")}</div>
       <div class="actions"><button>担当を保存</button></div></form>` : "";
-    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "担当", "作業中断メモ", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
+    return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "現在の担当", "工程ごとの担当履歴", "作業中断メモ", "検品取り消し履歴", "操作"], candidates.map(item => [
+      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", renderWorkOwnerHistory(item), renderWorkInterruption(item), renderInspectionHistory(item), button("担当を設定", "choose", item.id) +
       (canEditWorkInterruption(item) ? button("中断メモ", "editWorkInterruption", item.id) : "") +
       (shop.canChangeProductionDue(item) ? button("納期を変更", "editProductionDue", item.id) : "") +
       (nextLabel[item.status] ? button(nextLabel[item.status], "advance", item.id) : "") +
@@ -197,8 +207,8 @@
 
   function renderDelivery() {
     const candidates = state.orders.filter(order => ["inspected", "delivered"].includes(order.status));
-    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address),
+    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "工程ごとの担当履歴", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
+      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address), renderWorkOwnerHistory(item),
       (item.history ?? []).map(entry =>
         `${esc(formatDateTime(entry.at))} ${esc(entry.operator)}：${esc(entry.reason)}`).join("<br>"),
       renderInspectionHistory(item),
@@ -311,9 +321,7 @@
       Object.assign(order, { proofFile: file, revision: order.revision + 1, proofUpdatedAt: new Date().toISOString(), status: "proof" });
     }
     if (type === "owner" && order) {
-      const owner = data.get("owner").trim();
-      if (!owner) { notice.textContent = "担当者を入力してください。"; return; }
-      order.workOwner = owner;
+      if (!shop.assignWorkOwner(order, data.get("owner"))) { notice.textContent = "担当者を1〜50文字で入力してください。"; return; }
     }
     if (type === "rates") {
       const nextRates = Object.fromEntries(Object.keys(shop.products).map(product => [product, Number(data.get(product))]));
@@ -369,7 +377,7 @@
         break;
       }
       case "advance":
-        order.status = { ready: "printing", printing: "finishing", finishing: "inspected" }[order.status];
+        if (!shop.advanceWork(order)) return;
         break;
       case "revertInspection":
         if (order.status !== "inspected") return;
