@@ -32,7 +32,7 @@
     const common = {
       product: "flyer", quantity: 300, paper: "standard", double: false, finish: "none",
       rush: false, due: "2026-12-04", delivery: "pickup", address: "", note: "",
-      proofFile: "", revision: 0, workOwner: "", quoteSnapshot: null
+      proofFile: "", revision: 0, proofUpdatedAt: null, workOwner: "", quoteSnapshot: null
     };
     const orders = [
       { id: 101, customer: "駅前書店", status: "received" },
