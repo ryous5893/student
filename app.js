@@ -25,6 +25,7 @@
   let selection = null;
   let workEditor = "owner";
   let orderNumberFilter = "";
+  let proofFilter = "all";
 
   function load() {
     try {
@@ -117,11 +118,17 @@
 
   function renderProof() {
     const candidates = state.orders.filter(order => ["quoted", "proof", "returned"].includes(order.status));
-    const order = candidates.find(item => item.id === selection);
+    const filtered = proofFilter === "missing"
+      ? candidates.filter(item => item.quoteSnapshot != null && !String(item.proofFile ?? "").trim()) : candidates;
+    const order = filtered.find(item => item.id === selection);
+    const filterForm = `<form class="panel" data-form="proofFilter"><h2>表示条件</h2>
+      ${select("表示対象", "proofScope", { all: "すべて", missing: "確定見積あり・原稿未提出のみ" }, proofFilter)}
+      <div class="actions"><button>絞り込む</button></div></form>`;
     const form = order ? `<form class="panel" data-form="proof"><h2>注文 ${order.id} の入稿</h2><div class="grid">
       ${field("原稿ファイル名", "file", "", "text", "required maxlength=150")}
       </div><div class="actions"><button>入稿を記録</button></div></form>` : "";
-    return form + table(["注文", "注文者", "商品", "部数", "状態", "原稿", "版・確認状況", "入稿・差し替え日時", "確認メモ", "操作"], candidates.map(item => [
+    return filterForm + form + `<p role="status">表示件数：${filtered.length}件</p>`
+      + table(["注文", "注文者", "商品", "部数", "状態", "原稿", "版・確認状況", "入稿・差し替え日時", "確認メモ", "操作"], filtered.map(item => [
       ...orderCells(item), item.proofFile ? esc(item.proofFile) : "未入稿",
       item.proofFile ? `第${esc(item.revision)}版${item.status === "proof" ? "（確認中）" : item.status === "returned" ? "（差し戻し）" : ""}` : "—",
       esc(formatDateTime(item.proofUpdatedAt)), esc(item.note),
@@ -205,6 +212,12 @@
     const type = event.target.dataset.form;
     if (type === "orderFilter") {
       orderNumberFilter = event.submitter?.value === "clear" ? "" : data.get("orderNumber").trim();
+      render();
+      return;
+    }
+    if (type === "proofFilter") {
+      proofFilter = data.get("proofScope") === "missing" ? "missing" : "all";
+      selection = null;
       render();
       return;
     }
@@ -325,6 +338,7 @@
     if (!window.confirm("このブラウザに保存されている次のデータをサンプルに戻します。\n\n・すべての注文（入力・編集した注文は削除されます）\n・商品・料金設定の印刷単価\n\n元に戻すことはできません。よろしいですか？")) return;
     state = shop.seed();
     orderNumberFilter = "";
+    proofFilter = "all";
     selection = null;
     update("サンプルに戻しました。");
   });
