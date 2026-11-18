@@ -9,6 +9,15 @@
   const notice = document.querySelector("#notice");
   const money = value => new Intl.NumberFormat("ja-JP").format(value) + " 円";
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+  function formatDateTime(value) {
+    if (!value) return "未記録";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "未記録";
+    return new Intl.DateTimeFormat("ja-JP", {
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23"
+    }).format(date);
+  }
   let state = load();
   let page = "orders";
   let selection = null;
@@ -108,8 +117,10 @@
     const form = order ? `<form class="panel" data-form="proof"><h2>注文 ${order.id} の入稿</h2><div class="grid">
       ${field("原稿ファイル名", "file", "", "text", "required maxlength=150")}
       </div><div class="actions"><button>入稿を記録</button></div></form>` : "";
-    return form + table(["注文", "注文者", "商品", "部数", "状態", "原稿", "確認メモ", "操作"], candidates.map(item => [
-      ...orderCells(item), item.proofFile ? `第${item.revision}版 ・ ${esc(item.proofFile)}` : "未入稿", esc(item.note),
+    return form + table(["注文", "注文者", "商品", "部数", "状態", "原稿", "版・確認状況", "入稿・差し替え日時", "確認メモ", "操作"], candidates.map(item => [
+      ...orderCells(item), item.proofFile ? esc(item.proofFile) : "未入稿",
+      item.proofFile ? `第${esc(item.revision)}版${item.status === "proof" ? "（確認中）" : item.status === "returned" ? "（差し戻し）" : ""}` : "—",
+      esc(formatDateTime(item.proofUpdatedAt)), esc(item.note),
       button(item.status === "quoted" ? "入稿" : "再入稿", "choose", item.id) +
       (item.status === "proof" ? button("承認", "approve", item.id) + button("差し戻す", "returnProof", item.id) : "")
     ]));
@@ -185,12 +196,12 @@
         return;
       }
       if (order?.status === "received") Object.assign(order, fields);
-      else state.orders.push({ ...fields, id: state.nextId++, status: "received", proofFile: "", revision: 0, note: "", workOwner: "", quoteSnapshot: null });
+      else state.orders.push({ ...fields, id: state.nextId++, status: "received", proofFile: "", revision: 0, proofUpdatedAt: null, note: "", workOwner: "", quoteSnapshot: null });
     }
     if (type === "proof" && order) {
       const file = data.get("file").trim();
       if (!file) { notice.textContent = "原稿ファイル名を入力してください。"; return; }
-      Object.assign(order, { proofFile: file, revision: order.revision + 1, status: "proof" });
+      Object.assign(order, { proofFile: file, revision: order.revision + 1, proofUpdatedAt: new Date().toISOString(), status: "proof" });
     }
     if (type === "owner" && order) {
       const owner = data.get("owner").trim();
