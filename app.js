@@ -93,6 +93,8 @@
     return [order.id, esc(order.customer), esc(shop.products[order.product].name), order.quantity, shop.status[order.status]];
   }
 
+  const intakeChannels = { "": "未設定", phone: "電話", shop: "店頭", email: "メール" };
+
   function renderOrders() {
     const order = state.orders.find(item => item.id === selection);
     const addressLocked = order?.status === "delivered";
@@ -104,6 +106,7 @@
     const orderForm = addressSelection ? "" : `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2>
       <p>カードの新規注文は50部以上で受け付けます。</p><div class="grid">
       ${field("注文者", "customer", order?.customer, "text", "required maxlength=100")}
+      ${select("受付経路", "intakeChannel", intakeChannels, order?.intakeChannel ?? "")}
       ${field("連絡先電話番号", "phone", order?.phone, "tel", "maxlength=30")}
       ${field("備考", "remarks", order?.remarks, "text", "maxlength=500")}
       ${select("商品", "product", shop.products, order?.product)}
@@ -125,8 +128,8 @@
         ${select("状態", "statusFilter", { all: "すべて", ...shop.status }, statusFilter)}</div>
         <div class="actions"><button>絞り込む</button><button class="secondary" name="filterAction" value="clear">絞り込みを解除</button></div>
         </form><p role="status">表示件数：${filteredOrders.length}件</p>`
-      + table(["注文", "注文者", "商品", "部数", "状態", "納期", "備考", "操作"], filteredOrders.map(item => [
-        ...orderCells(item), esc(item.due), esc(item.remarks) || "—",
+      + table(["注文", "注文者", "商品", "部数", "状態", "納期", "備考", "受付経路", "操作"], filteredOrders.map(item => [
+        ...orderCells(item), esc(item.due), esc(item.remarks) || "—", esc(intakeChannels[item.intakeChannel] ?? "未設定"),
         (item.status === "received" ? button("編集", "edit", item.id) : "") +
         (item.delivery === "ship" ? button("配送先を編集", "address", item.id) : "") + button("見積へ", "quote", item.id)
       ])) + `<p class="summary" role="status">表示中の合計部数：${new Intl.NumberFormat("ja-JP").format(totalQuantity)}部</p>`;
@@ -408,10 +411,11 @@
     let savedMessage = "保存しました。";
     if (type === "order") {
       const fields = {
-        customer: data.get("customer").trim(), product: data.get("product"), quantity: Number(data.get("quantity")),
+        customer: data.get("customer").trim(), intakeChannel: data.get("intakeChannel"), product: data.get("product"), quantity: Number(data.get("quantity")),
         paper: data.get("paper"), double: data.get("sides") === "double", finish: data.get("finish"),
         rush: data.get("speed") === "rush", due: data.get("due"), delivery: data.get("delivery"), address: data.get("address").trim(), phone: data.get("phone").trim(), remarks: data.get("remarks").trim()
       };
+      if (!Object.hasOwn(intakeChannels, fields.intakeChannel)) { notice.textContent = "受付経路を選択してください。"; return; }
       if (!fields.customer || (fields.delivery === "ship" && !fields.address)) {
         notice.textContent = "注文者と、配送の場合は配送先を入力してください。";
         return;
