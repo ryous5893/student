@@ -183,3 +183,15 @@ test("工程担当: 不正な入力や対象外の工程では担当・状態・
     assert.deepEqual(order, before);
   }
 });
+
+test("印刷開始時刻: 印刷を開始した時刻を記録し、加工・検品へ進んでも変わらない", () => {
+  const order = seed().orders.find(item => item.id === 105);
+  assert.equal(order.printStartedAt, undefined);
+  advanceWork(order, "2026-11-18T08:10:00.000Z");
+  assert.equal(order.status, "printing");
+  assert.equal(order.printStartedAt, "2026-11-18T08:10:00.000Z");
+  advanceWork(order, "2026-11-18T09:00:00.000Z");
+  advanceWork(order, "2026-11-18T10:00:00.000Z");
+  assert.equal(order.status, "inspected");
+  assert.equal(order.printStartedAt, "2026-11-18T08:10:00.000Z");
+});
