@@ -6,6 +6,7 @@
   // 納品取消に必要な管理者パスコード（簡易的な制限。画面のソースから読めるため運用で管理すること）
   const adminPasscode = "0000";
   const views = { orders: "注文受付", quotes: "見積", proof: "入稿確認", work: "製造進行", delivery: "納品", rates: "商品・料金設定" };
+  const workflowCounts = document.querySelector("#workflow-counts");
   const nav = document.querySelector("#nav");
   const view = document.querySelector("#view");
   const notice = document.querySelector("#notice");
@@ -184,6 +185,14 @@
 
   const renderers = { orders: renderOrders, quotes: renderQuotes, proof: renderProof, work: renderWork, delivery: renderDelivery, rates: renderRates };
   function render() {
+    const counts = [
+      { label: "製造待ち", value: state.orders.filter(order => order.status === "ready").length, detail: "印刷開始前" },
+      { label: "入稿確認", value: state.orders.filter(order => ["quoted", "proof", "returned"].includes(order.status)).length, detail: "見積確定・確認中・差し戻し" },
+      { label: "納品待ち", value: state.orders.filter(order => order.status === "inspected").length, detail: "検品済み・未納品" }
+    ];
+    workflowCounts.innerHTML = counts.map(item =>
+      `<div><dt>${item.label}</dt><dd><strong>${new Intl.NumberFormat("ja-JP").format(item.value)}</strong>件<small>${item.detail}</small></dd></div>`
+    ).join("");
     nav.innerHTML = Object.entries(views).map(([key, name]) =>
       `<button type="button" data-page="${key}" ${key === page ? 'aria-current="page"' : ""}>${name}</button>`
     ).join("");
