@@ -156,8 +156,8 @@
         ...manualRows
       ])
     }<p class="summary">合計 ${money(pricing.total)}</p>${
-      order.status === "received" ? button("見積を確定", "confirmQuote", order.id) : "<p>確定済みの見積を表示しています。</p>"
-    }</section>` + manualForm;
+      order.status === "received" ? button("試算を履歴に保存", "saveEstimate", order.id) + button("見積を確定", "confirmQuote", order.id) : "<p>確定済みの見積を表示しています。</p>"
+    }</section>` + manualForm + (order.estimateHistory?.length ? `<section class="panel"><h2>確定前の試算履歴</h2>${table(["記録日時", "条件", "試算額", "区分"], order.estimateHistory.map(entry => [esc(formatDateTime(entry.at)), `${esc(shop.products[entry.product]?.name ?? entry.product)}・${esc(entry.quantity)}部・${esc(shop.paper[entry.paper]?.name ?? entry.paper)}・${entry.double ? "両面" : "片面"}`, money(entry.pricing.total), "未確定の試算"]))}</section>` : "");
     return blocks + table(["注文", "注文者", "商品", "部数", "状態", "操作"], state.orders.map(item =>
       [...orderCells(item), button("見積を見る", "quote", item.id)]
     ));
@@ -481,6 +481,14 @@
         if (!shop.canChangeProductionDue(order)) return;
         selection = order.id; workEditor = "due"; render(); view.querySelector("form input")?.focus(); return;
       case "clear": selection = null; addressSelection = false; render(); view.focus(); return;
+      case "saveEstimate": {
+        if (order.status !== "received") return;
+        const pricing = quoteWithManualDiscount(order);
+        if (pricing.total < 0) { notice.textContent = "値引き額を見直してください。"; return; }
+        const history = Array.isArray(order.estimateHistory) ? order.estimateHistory : [];
+        order.estimateHistory = [...history, { at: new Date().toISOString(), product: order.product, quantity: order.quantity, paper: order.paper, double: order.double, finish: order.finish, rush: order.rush, unitPrice: state.rates[order.product], pricing }];
+        break;
+      }
       case "confirmQuote":
         if (order.manualDiscount && !order.manualDiscount.reason?.trim()) { notice.textContent = "値引き理由がないため確定できません。"; return; }
         if (quoteWithManualDiscount(order).total < 0) { notice.textContent = "手入力値引きが見積の合計を超えています。値引き額を見直してください。"; return; }
