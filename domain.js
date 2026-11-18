@@ -15,11 +15,12 @@
   const delivery = { pickup: "店頭受取", ship: "配送" };
 
   function quote(order, rates) {
-    const printing = Number(rates[order.product]) * order.quantity * (order.double ? 2 : 1);
-    const finishing = finish[order.finish].fee;
-    const rush = order.rush ? 1000 : 0;
-    const paperCost = paper[order.paper].unit * order.quantity;
-    const discount = order.quantity >= 1000 ? Math.floor(printing * 0.1) : 0;
+    const floorYen = value => Math.floor(Number(value));
+    const printing = floorYen(Number(rates[order.product]) * order.quantity * (order.double ? 2 : 1));
+    const finishing = floorYen(finish[order.finish].fee);
+    const rush = floorYen(order.rush ? 1000 : 0);
+    const paperCost = floorYen(paper[order.paper].unit * order.quantity);
+    const discount = order.quantity >= 1000 ? floorYen(printing * 0.1) : 0;
     const subtotal = printing + paperCost + finishing + rush;
     return { printing, paperCost, finishing, rush, discount, total: subtotal - discount };
   }
