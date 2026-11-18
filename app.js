@@ -12,6 +12,7 @@
   let state = load();
   let page = "orders";
   let selection = null;
+  let addressSelection = false;
 
   function load() {
     try {
@@ -62,7 +63,13 @@
 
   function renderOrders() {
     const order = state.orders.find(item => item.id === selection);
-    return `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2><div class="grid">
+    const addressLocked = order?.status === "delivered";
+    const addressForm = order && addressSelection ? `<form class="panel" data-form="address">
+      <h2>注文 ${order.id} の配送先</h2><div class="grid">
+      ${field("配送先", "address", order.address, "text", `maxlength=200 ${addressLocked ? "disabled" : "required"}`)}
+      </div>${addressLocked ? '<p class="lock-reason" role="status">納品（出荷）完了後のため、配送先は変更できません。</p>' : ""}
+      <div class="actions">${addressLocked ? "" : "<button>配送先を保存</button>"}${button("編集を閉じる", "clear", order.id)}</div></form>` : "";
+    const orderForm = addressSelection ? "" : `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2><div class="grid">
       ${field("注文者", "customer", order?.customer, "text", "required maxlength=100")}
       ${select("商品", "product", shop.products, order?.product)}
       ${field("部数", "quantity", order?.quantity ?? 100, "number", "required min=1 max=100000 step=1")}
@@ -74,9 +81,10 @@
       ${select("納品方法", "delivery", shop.delivery, order?.delivery)}
       ${field("配送先", "address", order?.address, "text", "maxlength=200")}
       </div><div class="actions"><button>注文を保存</button>${order ? button("編集を閉じる", "clear", order.id) : ""}</div></form>`
-      + table(["注文", "注文者", "商品", "部数", "状態", "納期", "操作"], state.orders.map(item => [
+    return addressForm + orderForm + table(["注文", "注文者", "商品", "部数", "状態", "納期", "操作"], state.orders.map(item => [
         ...orderCells(item), esc(item.due),
-        (item.status === "received" ? button("編集", "edit", item.id) : "") + button("見積へ", "quote", item.id)
+        (item.status === "received" ? button("編集", "edit", item.id) : "") +
+        (item.delivery === "ship" ? button("配送先を編集", "address", item.id) : "") + button("見積へ", "quote", item.id)
       ]));
   }
 
@@ -153,6 +161,7 @@
     if (!(next in views)) return;
     page = next;
     selection = null;
+    addressSelection = false;
     notice.textContent = "";
     render();
     nav.querySelector('[aria-current="page"]').focus();
@@ -163,6 +172,22 @@
     const data = new FormData(event.target);
     const type = event.target.dataset.form;
     const order = state.orders.find(item => item.id === selection);
+    if (type === "address" && order) {
+      if (order.status === "delivered") {
+        notice.textContent = "納品（出荷）完了後のため、配送先は変更できません。";
+        return;
+      }
+      const address = data.get("address").trim();
+      if (order.delivery === "ship" && !address) {
+        notice.textContent = "配送先を入力してください。";
+        return;
+      }
+      order.address = address;
+      selection = null;
+      addressSelection = false;
+      update("注文 " + order.id + " の配送先を保存しました。");
+      return;
+    }
     if (type === "order") {
       const fields = {
         customer: data.get("customer").trim(), product: data.get("product"), quantity: Number(data.get("quantity")),
@@ -190,6 +215,7 @@
       for (const product of Object.keys(shop.products)) state.rates[product] = Number(data.get(product));
     }
     selection = null;
+    addressSelection = false;
     update("保存しました。");
   });
 
@@ -200,10 +226,17 @@
     const order = state.orders.find(item => item.id === Number(id));
     if (!order) return;
     switch (action) {
-      case "quote": page = "quotes"; selection = order.id; render(); view.focus(); return;
+      case "quote": page = "quotes"; selection = order.id; addressSelection = false; render(); view.focus(); return;
       case "edit":
-      case "choose": selection = order.id; render(); view.querySelector("form input")?.focus(); return;
-      case "clear": selection = null; render(); view.focus(); return;
+        addressSelection = false;
+        selection = order.id; render(); view.querySelector("form input")?.focus(); return;
+      case "address":
+        addressSelection = true;
+        selection = order.id; render(); view.querySelector("form input")?.focus(); return;
+      case "choose":
+        addressSelection = false;
+        selection = order.id; render(); view.querySelector("form input")?.focus(); return;
+      case "clear": selection = null; addressSelection = false; render(); view.focus(); return;
       case "confirmQuote":
         order.quoteSnapshot = shop.quote(order, state.rates);
         order.status = "quoted";
@@ -229,6 +262,7 @@
     if (!window.confirm("このブラウザの注文と料金をサンプルに戻しますか？")) return;
     state = shop.seed();
     selection = null;
+    addressSelection = false;
     update("サンプルに戻しました。");
   });
 
