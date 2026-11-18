@@ -12,6 +12,7 @@
   let state = load();
   let page = "orders";
   let selection = null;
+  let orderNumberFilter = "";
 
   function load() {
     try {
@@ -62,6 +63,7 @@
 
   function renderOrders() {
     const order = state.orders.find(item => item.id === selection);
+    const filteredOrders = state.orders.filter(item => !orderNumberFilter || String(item.id) === orderNumberFilter);
     return `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2><div class="grid">
       ${field("注文者", "customer", order?.customer, "text", "required maxlength=100")}
       ${select("商品", "product", shop.products, order?.product)}
@@ -74,7 +76,11 @@
       ${select("納品方法", "delivery", shop.delivery, order?.delivery)}
       ${field("配送先", "address", order?.address, "text", "maxlength=200")}
       </div><div class="actions"><button>注文を保存</button>${order ? button("編集を閉じる", "clear", order.id) : ""}</div></form>`
-      + table(["注文", "注文者", "商品", "部数", "状態", "納期", "操作"], state.orders.map(item => [
+      + `<form class="panel" data-form="orderFilter"><h2>注文番号で絞り込み</h2>
+        ${field("注文番号", "orderNumber", orderNumberFilter, "search", "inputmode=numeric")}
+        <div class="actions"><button>絞り込む</button><button class="secondary" name="filterAction" value="clear">絞り込みを解除</button></div>
+        </form><p role="status">表示件数：${filteredOrders.length}件</p>`
+      + table(["注文", "注文者", "商品", "部数", "状態", "納期", "操作"], filteredOrders.map(item => [
         ...orderCells(item), esc(item.due),
         (item.status === "received" ? button("編集", "edit", item.id) : "") + button("見積へ", "quote", item.id)
       ]));
@@ -162,6 +168,11 @@
     event.preventDefault();
     const data = new FormData(event.target);
     const type = event.target.dataset.form;
+    if (type === "orderFilter") {
+      orderNumberFilter = event.submitter?.value === "clear" ? "" : data.get("orderNumber").trim();
+      render();
+      return;
+    }
     const order = state.orders.find(item => item.id === selection);
     if (type === "order") {
       const fields = {
@@ -232,6 +243,7 @@
   document.querySelector("#reset").addEventListener("click", () => {
     if (!window.confirm("このブラウザの注文と料金をサンプルに戻しますか？")) return;
     state = shop.seed();
+    orderNumberFilter = "";
     selection = null;
     update("サンプルに戻しました。");
   });
