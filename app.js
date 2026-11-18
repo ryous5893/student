@@ -3,6 +3,8 @@
 
   const shop = PrintShop;
   const storageKey = "printshop-classroom-v1";
+  // 納品取消に必要な管理者パスコード（簡易的な制限。画面のソースから読めるため運用で管理すること）
+  const adminPasscode = "0000";
   const views = { orders: "注文受付", quotes: "見積", proof: "入稿確認", work: "製造進行", delivery: "納品", rates: "商品・料金設定" };
   const nav = document.querySelector("#nav");
   const view = document.querySelector("#view");
@@ -160,9 +162,12 @@
 
   function renderDelivery() {
     const candidates = state.orders.filter(order => ["inspected", "delivered"].includes(order.status));
-    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "操作"], candidates.map(item => [
+    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "取消履歴", "操作"], candidates.map(item => [
       ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address),
-      item.status === "inspected" ? button("納品完了", "deliver", item.id) : ""
+      (item.history ?? []).map(entry =>
+        `${esc(formatDateTime(entry.at))} ${esc(entry.operator)}：${esc(entry.reason)}`).join("<br>"),
+      item.status === "inspected" ? button("納品完了", "deliver", item.id)
+        : item.status === "delivered" ? button("納品取消（管理者）", "undoDeliver", item.id) : ""
     ]));
   }
 
@@ -296,6 +301,20 @@
         if (!window.confirm(`注文番号: ${order.id}\n注文者名: ${order.customer}\n\nこの注文を納品完了にしますか？`)) return;
         order.status = "delivered";
         break;
+      case "undoDeliver": {
+        if (order.status !== "delivered") return;
+        const operator = window.prompt(`注文 ${order.id} の納品済みを取り消します。\n管理者名を入力してください`)?.trim();
+        if (!operator) { notice.textContent = "管理者名を入力してください。"; return; }
+        if (window.prompt("管理者パスコードを入力してください") !== adminPasscode) {
+          notice.textContent = "管理者パスコードが違うため、取り消しませんでした。";
+          return;
+        }
+        const reason = window.prompt("取り消しの理由を入力してください")?.trim();
+        if (!reason) { notice.textContent = "理由が未入力のため、取り消しませんでした。"; return; }
+        order.history = [...(order.history ?? []), { action: "納品取消", operator, reason, at: new Date().toISOString() }];
+        order.status = "inspected";
+        break;
+      }
       default: return;
     }
     if (page !== "quotes") selection = null;
