@@ -73,7 +73,8 @@
   function renderOrders() {
     const order = state.orders.find(item => item.id === selection);
     const filteredOrders = state.orders.filter(item => !orderNumberFilter || String(item.id) === orderNumberFilter);
-    return `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2><div class="grid">
+    return `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2>
+      <p>カードの新規注文は50部以上で受け付けます。</p><div class="grid">
       ${field("注文者", "customer", order?.customer, "text", "required maxlength=100")}
       ${select("商品", "product", shop.products, order?.product)}
       ${field("部数", "quantity", order?.quantity ?? 100, "number", "required min=1 max=100000 step=1")}
@@ -193,6 +194,12 @@
       };
       if (!fields.customer || (fields.delivery === "ship" && !fields.address)) {
         notice.textContent = "注文者と、配送の場合は配送先を入力してください。";
+        return;
+      }
+      const keepsExistingQuantity = order?.status === "received" &&
+        order.product === fields.product && order.quantity === fields.quantity;
+      if (fields.product === "card" && fields.quantity < 50 && !keepsExistingQuantity) {
+        notice.textContent = "カードの注文は50部以上で入力してください。";
         return;
       }
       if (order?.status === "received") Object.assign(order, fields);
