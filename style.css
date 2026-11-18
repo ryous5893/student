@@ -29,3 +29,7 @@ td button { white-space: nowrap; }
 #notice { min-height: 2rem; font-weight: 650; color: #094e46; }
 .summary { font-size: 1.3rem; font-weight: 720; }
 .actions { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.due-change { min-width: 210px; padding: 8px 10px; border-left: 4px solid #b45a00; background: #fff4d8; }
+.due-change strong { display: block; margin-bottom: 4px; color: #783300; }
+.due-change details { margin-top: 6px; }

@@ -36,11 +36,25 @@
     return true;
   }
 
+  function canChangeProductionDue(order) {
+    return ["printing", "finishing", "inspected"].includes(order.status);
+  }
+
+  function changeProductionDue(order, due, at = new Date().toISOString()) {
+    if (!canChangeProductionDue(order) || typeof due !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(due)) return false;
+    const date = new Date(due + "T00:00:00.000Z");
+    if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== due || due === order.due) return false;
+    const history = Array.isArray(order.productionDueHistory) ? order.productionDueHistory : [];
+    order.productionDueHistory = [...history, { at, from: order.due, to: due }];
+    order.due = due;
+    return true;
+  }
+
   function seed() {
     const common = {
       product: "flyer", quantity: 300, paper: "standard", double: false, finish: "none",
       rush: false, due: "2026-12-04", delivery: "pickup", address: "", note: "",
-      proofFile: "", revision: 0, workOwner: "", quoteSnapshot: null
+      proofFile: "", revision: 0, proofUpdatedAt: null, workOwner: "", quoteSnapshot: null
     };
     const orders = [
       { id: 101, customer: "駅前書店", status: "received" },
@@ -57,7 +71,7 @@
     return { orders, rates, nextId: 107 };
   }
 
-  const api = { status, products, paper, finish, delivery, quote, manufacturingOrders, revertInspection, seed };
+  const api = { status, products, paper, finish, delivery, quote, manufacturingOrders, revertInspection, canChangeProductionDue, changeProductionDue, seed };
   globalThis.PrintShop = api;
   if (typeof module !== "undefined") module.exports = api;
 })();
