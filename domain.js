@@ -31,13 +31,14 @@
   function seed() {
     const common = {
       product: "flyer", quantity: 300, paper: "standard", double: false, finish: "none",
-      rush: false, due: "2026-12-04", delivery: "pickup", address: "", note: "",
+      rush: false, due: "2026-12-04", delivery: "pickup", address: "", reviewMemo: "", returnReasons: [],
       proofFile: "", revision: 0, workOwner: "", quoteSnapshot: null
     };
     const orders = [
       { id: 101, customer: "駅前書店", status: "received" },
       { id: 102, customer: "市民ホール", status: "proof", product: "poster", quantity: 30, proofFile: "hall-v1.pdf", revision: 1 },
-      { id: 103, customer: "朝市実行委員会", status: "returned", proofFile: "market-v1.pdf", revision: 1, note: "開催時刻を修正してください" },
+      { id: 103, customer: "朝市実行委員会", status: "returned", proofFile: "market-v1.pdf", revision: 1,
+        returnReasons: [{ revision: 1, reason: "開催時刻を修正してください" }] },
       { id: 104, customer: "青葉商店会", status: "received", quantity: 1000, double: true },
       { id: 105, customer: "北通りカフェ", status: "ready", product: "card", proofFile: "cafe-v1.pdf", revision: 1 },
       { id: 106, customer: "まちなか図書室", status: "inspected", product: "poster", quantity: 12, delivery: "ship", address: "中央通り2-8", proofFile: "library-v1.pdf", revision: 1 }
