@@ -15,11 +15,12 @@ p { line-height: 1.55; }
 .panel { background: #fff; border: 1px solid #c9d7d6; padding: 16px; margin: 16px 0; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px,100%), 1fr)); gap: 12px; }
 label { display: grid; gap: 5px; align-content: start; font-size: .92rem; }
-input, select, button { font: inherit; min-height: 38px; padding: 5px 9px; }
-input, select { width: 100%; border: 1px solid #72908f; border-radius: 3px; color: #14282e; background: #fff; }
+input, select, textarea, button { font: inherit; min-height: 38px; padding: 5px 9px; }
+input, select, textarea { width: 100%; border: 1px solid #72908f; border-radius: 3px; color: #14282e; background: #fff; }
+textarea { min-height: 100px; resize: vertical; }
 button { width: max-content; max-width: 100%; cursor: pointer; border: 1px solid transparent; border-radius: 3px; color: #fff; background: #00665e; font-weight: 650; }
 button.secondary, td button { color: #18434b; background: #e8f2f1; border-color: #b1c9c7; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid #a84800; outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #a84800; outline-offset: 2px; }
 button + button { margin-left: 4px; }
 .table { overflow-x: auto; margin-bottom: 18px; }
 table { width: 100%; border-collapse: collapse; background: #fff; }
