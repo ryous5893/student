@@ -10,6 +10,7 @@
   const nav = document.querySelector("#nav");
   const view = document.querySelector("#view");
   const notice = document.querySelector("#notice");
+  const roleSelect = document.querySelector("#role");
   const money = value => new Intl.NumberFormat("ja-JP").format(value) + " 円";
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
   function formatDateTime(value) {
@@ -24,6 +25,7 @@
   let state = load();
   let page = "orders";
   let selection = null;
+  let role = "viewer";
   let addressSelection = false;
   let proofSelectionMode = "upload";
   let workEditor = "owner";
@@ -31,6 +33,10 @@
   let statusFilter = "all";
   let proofFilter = "all";
   let workOwnerFilter = "all";
+
+  function canEditRates() {
+    return role === "pricing" || role === "admin";
+  }
 
   function load() {
     try {
@@ -302,12 +308,13 @@
   }
 
   function renderRates() {
-    return `<form class="panel" data-form="rates"><h2>商品別の印刷単価</h2>
+    const editor = canEditRates() ? `<form class="panel" data-form="rates"><h2>商品別の印刷単価</h2>
       <p>片面1部あたりの単価です。保存前に影響する未確定見積の件数を確認します。確定済みの見積には確定時点の金額を表示します。</p>
       <div class="grid">${Object.entries(shop.products).map(([key, product]) =>
         field(product.name + "（円）", key, state.rates[key], "number", "required min=0 max=100000 step=1")).join("")}</div>
-      <div class="actions"><button>単価を保存</button></div></form>`
-      + table(["用紙", "1部あたり"], Object.values(shop.paper).map(item => [esc(item.name), money(item.unit)]))
+      <div class="actions"><button>単価を保存</button></div></form>` :
+      `<p class="panel">単価は閲覧のみ可能です。変更が必要な場合は料金担当または管理者に依頼してください。</p>`;
+    return editor + table(["用紙", "1部あたり"], Object.values(shop.paper).map(item => [esc(item.name), money(item.unit)]))
       + table(["加工", "1注文あたり"], Object.values(shop.finish).map(item => [esc(item.name), money(item.fee)]));
   }
 
@@ -338,10 +345,20 @@
     nav.querySelector('[aria-current="page"]').focus();
   });
 
+  roleSelect.addEventListener("change", () => {
+    role = roleSelect.value;
+    render();
+    notice.textContent = role === "viewer" ? "閲覧のみの役割に切り替えました。" : "役割を切り替えました。";
+  });
+
   view.addEventListener("submit", event => {
     event.preventDefault();
     const data = new FormData(event.target);
     const type = event.target.dataset.form;
+    if (type === "rates" && !canEditRates()) {
+      notice.textContent = "単価を変更できるのは料金担当と管理者のみです。";
+      return;
+    }
     if (type === "orderFilter") {
       const clear = event.submitter?.value === "clear";
       orderNumberFilter = clear ? "" : data.get("orderNumber").trim();
