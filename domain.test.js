@@ -1,7 +1,7 @@
 // 実行: node --test domain.test.js
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { quote, seed } = require("./domain.js");
+const { quote, seed, canChangeProductionDue, changeProductionDue } = require("./domain.js");
 
 const rates = { flyer: 10, poster: 120, card: 16 };
 const flyer = (overrides) => ({
@@ -55,4 +55,47 @@ test("要望の確認ケース: 片面1,000部は割引あり、両面999部は�
 
   const double999 = quote(flyer({ quantity: 999, double: true }), rates);
   assert.deepEqual(double999, { printing: 19980, paperCost: 1998, finishing: 0, rush: 0, discount: 0, total: 21978 });
+});
+
+test("納期変更: 印刷開始後の各工程で変更前後と日時を残し、確定見積を保持する", () => {
+  for (const status of ["printing", "finishing", "inspected"]) {
+    const order = { ...seed().orders.find(item => item.id === 106), status };
+    const snapshot = structuredClone(order.quoteSnapshot);
+    assert.equal(canChangeProductionDue(order), true);
+    assert.equal(changeProductionDue(order, "2026-12-05", "2026-11-18T08:00:00.000Z"), true);
+    assert.equal(order.due, "2026-12-05");
+    assert.equal(order.status, status);
+    assert.deepEqual(order.quoteSnapshot, snapshot);
+    assert.deepEqual(order.productionDueHistory, [{ at: "2026-11-18T08:00:00.000Z", from: "2026-12-04", to: "2026-12-05" }]);
+  }
+});
+
+test("納期変更: 印刷前や納品済みの注文は変更しない", () => {
+  for (const status of ["received", "quoted", "proof", "returned", "ready", "delivered"]) {
+    const order = { ...seed().orders[0], status };
+    const before = structuredClone(order);
+    assert.equal(canChangeProductionDue(order), false);
+    assert.equal(changeProductionDue(order, "2026-12-05"), false);
+    assert.deepEqual(order, before);
+  }
+});
+
+test("納期変更: 不正な日付と同じ日付は保存せず、うるう日は正しく扱う", () => {
+  const order = seed().orders.find(item => item.id === 106);
+  const before = structuredClone(order);
+  for (const due of ["", "invalid", "2026-02-29", "2026-02-30", "2026-13-01", "2026-11-3", order.due, null]) {
+    assert.equal(changeProductionDue(order, due), false);
+    assert.deepEqual(order, before);
+  }
+  assert.equal(changeProductionDue(order, "2028-02-29"), true);
+});
+
+test("納期変更: 複数回の変更履歴を保持する", () => {
+  const order = seed().orders.find(item => item.id === 106);
+  changeProductionDue(order, "2026-12-05", "2026-11-18T08:00:00.000Z");
+  changeProductionDue(order, "2026-12-03", "2026-11-18T09:00:00.000Z");
+  assert.equal(order.due, "2026-12-03");
+  assert.deepEqual(order.productionDueHistory.map(entry => [entry.from, entry.to]), [
+    ["2026-12-04", "2026-12-05"], ["2026-12-05", "2026-12-03"]
+  ]);
 });

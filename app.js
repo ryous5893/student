@@ -21,6 +21,7 @@
   let state = load();
   let page = "orders";
   let selection = null;
+  let workEditor = "owner";
   let orderNumberFilter = "";
 
   function load() {
@@ -127,15 +128,32 @@
     ]));
   }
 
+  function renderProductionDue(order) {
+    const history = Array.isArray(order.productionDueHistory) ? order.productionDueHistory : [];
+    if (!history.length) return esc(order.due);
+    const latest = history[history.length - 1];
+    return `<div class="due-change"><strong>印刷開始後の納期変更</strong>
+      <div>変更前：${esc(latest.from) || "未設定"}</div><div>変更後：${esc(order.due)}</div>
+      <div>変更日時：${esc(formatDateTime(latest.at))}</div>
+      <details><summary>変更履歴（${history.length}件）</summary><ul>${history.map(entry =>
+        `<li>${esc(entry.from) || "未設定"} → ${esc(entry.to)}（${esc(formatDateTime(entry.at))}）</li>`
+      ).join("")}</ul></details></div>`;
+  }
+
   function renderWork() {
     const candidates = shop.manufacturingOrders(state.orders);
     const nextLabel = { ready: "印刷を開始", printing: "加工へ進む", finishing: "検品完了" };
     const order = candidates.find(item => item.id === selection);
-    const form = order ? `<form class="panel" data-form="owner"><h2>注文 ${order.id} の製造担当</h2><div class="grid">
+    const form = order && workEditor === "due" ? `<form class="panel" data-form="productionDue"><h2>注文 ${order.id} の納期変更</h2>
+      <p>注文者：${esc(order.customer)} ／ 現在の納期：${esc(order.due)}</p>
+      ${field("新しい希望納期", "due", order.due, "date", "required")}
+      <div class="actions"><button>変更を保存</button>${button("閉じる", "clear", order.id)}</div></form>`
+      : order ? `<form class="panel" data-form="owner"><h2>注文 ${order.id} の製造担当</h2><div class="grid">
       ${field("担当者", "owner", order.workOwner, "text", "required maxlength=50")}</div>
       <div class="actions"><button>担当を保存</button></div></form>` : "";
     return form + table(["注文", "注文者", "商品", "部数", "状態", "希望納期", "担当", "操作"], candidates.map(item => [
-      ...orderCells(item), esc(item.due), esc(item.workOwner) || "未割当", button("担当を設定", "choose", item.id) +
+      ...orderCells(item), renderProductionDue(item), esc(item.workOwner) || "未割当", button("担当を設定", "choose", item.id) +
+      (shop.canChangeProductionDue(item) ? button("納期を変更", "editProductionDue", item.id) : "") +
       (nextLabel[item.status] ? button(nextLabel[item.status], "advance", item.id) : "")
     ]));
   }
@@ -186,6 +204,16 @@
       return;
     }
     const order = state.orders.find(item => item.id === selection);
+    if (type === "productionDue") {
+      if (!order || !shop.canChangeProductionDue(order)) { notice.textContent = "印刷開始後・納品前の注文だけ納期を変更できます。"; return; }
+      const due = data.get("due");
+      if (due === order.due) { notice.textContent = "納期は変更されていません。"; return; }
+      if (!window.confirm(`注文 ${order.id}（${order.customer}）の納期を ${order.due} から ${due} に変更しますか？`)) return;
+      if (!shop.changeProductionDue(order, due)) { notice.textContent = "有効な希望納期を入力してください。"; return; }
+      selection = null;
+      update("注文 " + order.id + " の納期を変更しました。");
+      return;
+    }
     if (type === "order") {
       const fields = {
         customer: data.get("customer").trim(), product: data.get("product"), quantity: Number(data.get("quantity")),
@@ -244,7 +272,10 @@
     switch (action) {
       case "quote": page = "quotes"; selection = order.id; render(); view.focus(); return;
       case "edit":
-      case "choose": selection = order.id; render(); view.querySelector("form input")?.focus(); return;
+      case "choose": selection = order.id; workEditor = "owner"; render(); view.querySelector("form input")?.focus(); return;
+      case "editProductionDue":
+        if (!shop.canChangeProductionDue(order)) return;
+        selection = order.id; workEditor = "due"; render(); view.querySelector("form input")?.focus(); return;
       case "clear": selection = null; render(); view.focus(); return;
       case "confirmQuote":
         order.quoteSnapshot = shop.quote(order, state.rates);
