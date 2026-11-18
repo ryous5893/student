@@ -218,7 +218,11 @@
       case "advance":
         order.status = { ready: "printing", printing: "finishing", finishing: "inspected" }[order.status];
         break;
-      case "deliver": order.status = "delivered"; break;
+      case "deliver":
+        if (order.status !== "inspected") return;
+        if (!window.confirm(`注文番号: ${order.id}\n注文者名: ${order.customer}\n\nこの注文を納品完了にしますか？`)) return;
+        order.status = "delivered";
+        break;
       default: return;
     }
     if (page !== "quotes") selection = null;
