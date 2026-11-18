@@ -48,3 +48,11 @@ test("端数は切り捨て", () => {
   assert.equal(result.printing, 3009);
   assert.equal(result.discount, 300);
 });
+
+test("要望の確認ケース: 片面1,000部は割引あり、両面999部は割引なし", () => {
+  const single1000 = quote(flyer({ quantity: 1000, double: false }), rates);
+  assert.deepEqual(single1000, { printing: 10000, paperCost: 2000, finishing: 0, rush: 0, discount: 1000, total: 11000 });
+
+  const double999 = quote(flyer({ quantity: 999, double: true }), rates);
+  assert.deepEqual(double999, { printing: 19980, paperCost: 1998, finishing: 0, rush: 0, discount: 0, total: 21978 });
+});
