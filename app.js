@@ -99,6 +99,7 @@
     return `<form class="panel" data-form="order"><h2>${order ? `注文 ${order.id} を編集` : "新規注文"}</h2>
       <p>カードの新規注文は50部以上で受け付けます。</p><div class="grid">
       ${field("注文者", "customer", order?.customer, "text", "required maxlength=100")}
+      ${field("連絡先電話番号", "phone", order?.phone, "tel", "maxlength=30")}
       ${select("商品", "product", shop.products, order?.product)}
       ${field("部数", "quantity", order?.quantity ?? 100, "number", "required min=1 max=100000 step=1")}
       ${select("用紙", "paper", shop.paper, order?.paper)}
@@ -232,8 +233,8 @@
 
   function renderDelivery() {
     const candidates = state.orders.filter(order => ["inspected", "delivered"].includes(order.status));
-    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "工程ごとの担当履歴", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address), renderWorkOwnerHistory(item),
+    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "連絡先電話番号", "工程ごとの担当履歴", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
+      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address), esc(item.phone) || "未登録", renderWorkOwnerHistory(item),
       (item.history ?? []).map(entry =>
         `${esc(formatDateTime(entry.at))} ${esc(entry.operator)}：${esc(entry.reason)}`).join("<br>"),
       renderInspectionHistory(item),
@@ -327,7 +328,7 @@
       const fields = {
         customer: data.get("customer").trim(), product: data.get("product"), quantity: Number(data.get("quantity")),
         paper: data.get("paper"), double: data.get("sides") === "double", finish: data.get("finish"),
-        rush: data.get("speed") === "rush", due: data.get("due"), delivery: data.get("delivery"), address: data.get("address").trim()
+        rush: data.get("speed") === "rush", due: data.get("due"), delivery: data.get("delivery"), address: data.get("address").trim(), phone: data.get("phone").trim()
       };
       if (!fields.customer || (fields.delivery === "ship" && !fields.address)) {
         notice.textContent = "注文者と、配送の場合は配送先を入力してください。";
