@@ -89,6 +89,15 @@
     }</tbody></table></div>`;
   }
 
+  // 希望納期を、今日・明日以降・過去のラベル付きで表示する（今日は端末の日付で判定）
+  function renderDue(due) {
+    if (!due) return esc(due);
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const [kind, label] = due === today ? ["today", "今日"] : due < today ? ["past", "過去"] : ["future", "明日以降"];
+    return `${esc(due)} <span class="due-tag due-${kind}">${label}</span>`;
+  }
+
   function orderCells(order) {
     return [order.id, esc(order.customer), esc(shop.products[order.product].name), order.quantity, shop.status[order.status]];
   }
@@ -129,7 +138,7 @@
         <div class="actions"><button>絞り込む</button><button class="secondary" name="filterAction" value="clear">絞り込みを解除</button></div>
         </form><p role="status">表示件数：${filteredOrders.length}件</p>`
       + table(["注文", "注文者", "商品", "部数", "状態", "納期", "備考", "受付経路", "操作"], filteredOrders.map(item => [
-        ...orderCells(item), esc(item.due), esc(item.remarks) || "—", esc(intakeChannels[item.intakeChannel] ?? "未設定"),
+        ...orderCells(item), renderDue(item.due), esc(item.remarks) || "—", esc(intakeChannels[item.intakeChannel] ?? "未設定"),
         (item.status === "received" ? button("編集", "edit", item.id) : "") +
         (item.delivery === "ship" ? button("配送先を編集", "address", item.id) : "") + button("見積へ", "quote", item.id)
       ])) + `<p class="summary" role="status">表示中の合計部数：${new Intl.NumberFormat("ja-JP").format(totalQuantity)}部</p>`;
