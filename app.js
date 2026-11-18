@@ -279,13 +279,16 @@
 
   function renderDelivery() {
     const candidates = state.orders.filter(order => ["inspected", "delivered"].includes(order.status));
-    return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "連絡先電話番号", "工程ごとの担当履歴", "承認内容", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
+    const order = candidates.find(item => item.id === selection && item.status === "delivered" && item.delivery === "ship");
+    const form = order ? `<form class="panel" data-form="returnReason"><h2>注文 ${order.id} の返送理由</h2>${select("返送理由", "reason", { "": "選択してください", absent: "不在", unknown: "住所不明", other: "その他" }, "")}<div class="actions"><button>返送理由を記録</button>${button("閉じる", "clear", order.id)}</div></form>` : "";
+    return form + table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "連絡先電話番号", "工程ごとの担当履歴", "承認内容", "取消履歴", "検品取り消し履歴", "返送理由", "操作"], candidates.map(item => [
       ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address) || (item.delivery === "pickup" ? "不要（店頭受取）" : "未登録"), esc(item.phone) || "未登録", renderWorkOwnerHistory(item), renderApproval(item),
       (item.history ?? []).map(entry =>
         `${esc(formatDateTime(entry.at))} ${esc(entry.operator)}：${esc(entry.reason)}`).join("<br>"),
       renderInspectionHistory(item),
+      (Array.isArray(item.returnHistory) ? item.returnHistory : []).map(entry => `${esc(formatDateTime(entry.at))}：${esc(entry.reason)}`).join("<br>") || "—",
       item.status === "inspected" ? button("納品完了", "deliver", item.id) + button("加工中に戻す", "revertInspection", item.id)
-        : item.status === "delivered" ? button("納品取消（管理者）", "undoDeliver", item.id) : ""
+        : item.status === "delivered" ? button("納品取消（管理者）", "undoDeliver", item.id) + (item.delivery === "ship" ? button("返送理由を記録", "chooseReturnReason", item.id) : "") : ""
     ]));
   }
 
@@ -397,6 +400,16 @@
       order.workInterruption = { reason, resumeDate };
       selection = null;
       update("注文 " + order.id + " の作業中断メモを保存しました。");
+      return;
+    }
+    if (type === "returnReason") {
+      const reasons = { absent: "不在", unknown: "住所不明", other: "その他" };
+      const key = data.get("reason");
+      if (!order || order.status !== "delivered" || order.delivery !== "ship" || !Object.hasOwn(reasons, key)) { notice.textContent = "配送済みの注文と返送理由を選択してください。"; return; }
+      const history = Array.isArray(order.returnHistory) ? order.returnHistory : [];
+      order.returnHistory = [...history, { reason: reasons[key], at: new Date().toISOString() }];
+      selection = null;
+      update("注文 " + order.id + " の返送理由を記録しました。");
       return;
     }
     if (type === "productionDue") {
@@ -511,6 +524,9 @@
         if (!window.confirm(`注文 ${order.id} の作業中断メモを解除しますか？`)) return;
         delete order.workInterruption;
         break;
+      case "chooseReturnReason":
+        if (order.status !== "delivered" || order.delivery !== "ship") return;
+        selection = order.id; render(); view.querySelector("form select")?.focus(); return;
       case "editProductionDue":
         if (!shop.canChangeProductionDue(order)) return;
         selection = order.id; workEditor = "due"; render(); view.querySelector("form input")?.focus(); return;
