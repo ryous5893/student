@@ -108,7 +108,7 @@
       ${field("希望納期", "due", order?.due, "date", "required")}
       ${select("納品方法", "delivery", shop.delivery, order?.delivery)}
       ${field("配送先", "address", order?.address, "text", "maxlength=200")}
-      </div><div class="actions"><button>注文を保存</button>${order ? button("編集を閉じる", "clear", order.id) : ""}</div></form>`
+      </div><p>配送先は配送の場合に必要です。店頭受取の場合は空欄で構いません。</p><div class="actions"><button>注文を保存</button>${order ? button("編集を閉じる", "clear", order.id) : ""}</div></form>`
       + `<form class="panel" data-form="orderFilter"><h2>注文の絞り込み</h2><div class="grid">
         ${field("注文番号", "orderNumber", orderNumberFilter, "search", "inputmode=numeric")}
         ${select("状態", "statusFilter", { all: "すべて", ...shop.status }, statusFilter)}</div>
@@ -233,7 +233,7 @@
   function renderDelivery() {
     const candidates = state.orders.filter(order => ["inspected", "delivered"].includes(order.status));
     return table(["注文", "注文者", "商品", "部数", "状態", "納品方法", "希望納期", "配送先", "工程ごとの担当履歴", "取消履歴", "検品取り消し履歴", "操作"], candidates.map(item => [
-      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address), renderWorkOwnerHistory(item),
+      ...orderCells(item), shop.delivery[item.delivery], esc(item.due), esc(item.address) || (item.delivery === "pickup" ? "不要（店頭受取）" : "未登録"), renderWorkOwnerHistory(item),
       (item.history ?? []).map(entry =>
         `${esc(formatDateTime(entry.at))} ${esc(entry.operator)}：${esc(entry.reason)}`).join("<br>"),
       renderInspectionHistory(item),
