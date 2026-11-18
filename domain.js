@@ -25,7 +25,7 @@
   }
 
   function manufacturingOrders(orders) {
-    return orders.filter(order => ["returned", "ready", "printing", "finishing", "inspected"].includes(order.status));
+    return orders.filter(order => ["ready", "printing", "finishing", "inspected"].includes(order.status));
   }
 
   function seed() {
