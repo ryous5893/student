@@ -130,8 +130,9 @@
       ${field("原稿ファイル名", "file", "", "text", "required maxlength=150")}
       </div><div class="actions"><button>入稿を記録</button></div></form>` : "";
     return filterForm + form + `<p role="status">表示件数：${filtered.length}件</p>`
-      + table(["注文", "注文者", "商品", "部数", "状態", "原稿", "版・確認状況", "入稿・差し替え日時", "確認メモ", "操作"], filtered.map(item => [
+      + table(["注文", "注文者", "商品", "部数", "状態", "原稿", "直前の版", "版・確認状況", "入稿・差し替え日時", "確認メモ", "操作"], filtered.map(item => [
       ...orderCells(item), item.proofFile ? esc(item.proofFile) : "未入稿",
+      item.proofHistory?.length ? (previous => `第${esc(previous.revision)}版 ・ ${esc(previous.file)}`)(item.proofHistory.at(-1)) : "—",
       item.proofFile ? `第${esc(item.revision)}版${item.status === "proof" ? "（確認中）" : item.status === "returned" ? "（差し戻し）" : ""}` : "—",
       esc(formatDateTime(item.proofUpdatedAt)), esc(item.note),
       button(item.status === "quoted" ? "入稿" : "再入稿", "choose", item.id) +
@@ -308,6 +309,9 @@
     if (type === "proof" && order) {
       const file = data.get("file").trim();
       if (!file) { notice.textContent = "原稿ファイル名を入力してください。"; return; }
+      if (order.proofFile) {
+        order.proofHistory = [...(order.proofHistory ?? []), { revision: order.revision, file: order.proofFile, at: order.proofUpdatedAt ?? null }];
+      }
       Object.assign(order, { proofFile: file, revision: order.revision + 1, proofUpdatedAt: new Date().toISOString(), status: "proof" });
     }
     if (type === "owner" && order) {
